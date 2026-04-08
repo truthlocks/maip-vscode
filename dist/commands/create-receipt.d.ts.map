@@ -1,0 +1,1 @@
+{"version":3,"file":"create-receipt.d.ts","sourceRoot":"","sources":["../../src/commands/create-receipt.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,OAAO,KAAK,MAAM,MAAM,QAAQ,CAAC;AAEjC,OAAO,KAAK,EAAE,UAAU,EAAE,MAAM,WAAW,CAAC;AAY5C,wBAAgB,4BAA4B,CAC1C,MAAM,EAAE,UAAU,EAClB,eAAe,EAAE,MAAM,IAAI,GAC1B,MAAM,CAAC,UAAU,CA+GnB"}
