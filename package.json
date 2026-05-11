@@ -2,7 +2,7 @@
   "name": "maip-vscode",
   "displayName": "MAIP - Machine Identity & Integrity",
   "description": "Machine-Actionable Integrity Protocol for VS Code — receipts, trust scores, and agent management",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "truthlocks",
   "license": "Apache-2.0",
   "icon": "icon.png",
