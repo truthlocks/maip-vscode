@@ -14,7 +14,9 @@ export function getConfig(): MAIPConfig {
   const cfg = vscode.workspace.getConfiguration(SECTION);
 
   return {
-    apiUrl: cfg.get<string>("apiUrl", "https://api.truthlocks.com/v1/machine-identity").replace(/\/+$/, ""),
+    apiUrl: cfg
+      .get<string>("apiUrl", "https://api.truthlocks.com/v1")
+      .replace(/\/+$/, ""),
     apiKey: cfg.get<string>("apiKey", ""),
     tenantId: cfg.get<string>("tenantId", ""),
     timeoutMs: 30_000,
@@ -27,15 +29,21 @@ export function getAgentId(): string {
 }
 
 export function isAutoReceiptOnSaveEnabled(): boolean {
-  return vscode.workspace.getConfiguration(SECTION).get<boolean>("autoReceiptOnSave", false);
+  return vscode.workspace
+    .getConfiguration(SECTION)
+    .get<boolean>("autoReceiptOnSave", false);
 }
 
 export function isAutoReceiptOnCommitEnabled(): boolean {
-  return vscode.workspace.getConfiguration(SECTION).get<boolean>("autoReceiptOnCommit", true);
+  return vscode.workspace
+    .getConfiguration(SECTION)
+    .get<boolean>("autoReceiptOnCommit", true);
 }
 
 export function isShowTrustBadgesEnabled(): boolean {
-  return vscode.workspace.getConfiguration(SECTION).get<boolean>("showTrustBadges", true);
+  return vscode.workspace
+    .getConfiguration(SECTION)
+    .get<boolean>("showTrustBadges", true);
 }
 
 export function isConfigured(): boolean {

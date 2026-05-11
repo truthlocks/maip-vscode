@@ -72,15 +72,33 @@ export class MAIPClient {
   // Agents
   // ---------------------------------------------------------------------------
 
-  async registerAgent(request: RegisterAgentRequest): Promise<RegisterAgentResponse> {
-    return this.request<RegisterAgentResponse>("POST", "/agents", request);
+  async registerAgent(
+    request: RegisterAgentRequest,
+  ): Promise<RegisterAgentResponse> {
+    const body = {
+      display_name: request.name,
+      type: request.type,
+      capabilities: request.capabilities,
+      metadata: request.metadata,
+    };
+    const agent = await this.request<AgentIdentity>("POST", "/agents", body);
+    return {
+      agent,
+      trust_score:
+        (agent as unknown as Record<string, number>).trust_score ?? 0.5,
+    };
   }
 
   async getAgent(agentId: string): Promise<AgentIdentity> {
-    return this.request<AgentIdentity>("GET", `/agents/${encodeURIComponent(agentId)}`);
+    return this.request<AgentIdentity>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}`,
+    );
   }
 
-  async listAgents(params?: ListAgentsParams): Promise<PaginatedResponse<AgentIdentity>> {
+  async listAgents(
+    params?: ListAgentsParams,
+  ): Promise<PaginatedResponse<AgentIdentity>> {
     return this.request<PaginatedResponse<AgentIdentity>>(
       "GET",
       "/agents",
@@ -90,11 +108,17 @@ export class MAIPClient {
   }
 
   async suspendAgent(agentId: string): Promise<AgentIdentity> {
-    return this.request<AgentIdentity>("POST", `/agents/${encodeURIComponent(agentId)}/suspend`);
+    return this.request<AgentIdentity>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/suspend`,
+    );
   }
 
   async revokeAgent(agentId: string): Promise<AgentIdentity> {
-    return this.request<AgentIdentity>("POST", `/agents/${encodeURIComponent(agentId)}/revoke`);
+    return this.request<AgentIdentity>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/revoke`,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -106,7 +130,10 @@ export class MAIPClient {
   }
 
   async getReceipt(receiptId: string): Promise<Receipt> {
-    return this.request<Receipt>("GET", `/receipts/${encodeURIComponent(receiptId)}`);
+    return this.request<Receipt>(
+      "GET",
+      `/receipts/${encodeURIComponent(receiptId)}`,
+    );
   }
 
   async verifyReceipt(receiptId: string): Promise<VerifyReceiptResponse> {
@@ -116,7 +143,9 @@ export class MAIPClient {
     );
   }
 
-  async listReceipts(params?: ListReceiptsParams): Promise<PaginatedResponse<Receipt>> {
+  async listReceipts(
+    params?: ListReceiptsParams,
+  ): Promise<PaginatedResponse<Receipt>> {
     return this.request<PaginatedResponse<Receipt>>(
       "GET",
       "/receipts",
@@ -130,10 +159,16 @@ export class MAIPClient {
   // ---------------------------------------------------------------------------
 
   async getTrustScore(agentId: string): Promise<TrustScore> {
-    return this.request<TrustScore>("GET", `/trust/${encodeURIComponent(agentId)}/score`);
+    return this.request<TrustScore>(
+      "GET",
+      `/trust/${encodeURIComponent(agentId)}/score`,
+    );
   }
 
-  async getTrustHistory(agentId: string, limit?: number): Promise<readonly TrustHistoryEntry[]> {
+  async getTrustHistory(
+    agentId: string,
+    limit?: number,
+  ): Promise<readonly TrustHistoryEntry[]> {
     return this.request<readonly TrustHistoryEntry[]>(
       "GET",
       `/trust/${encodeURIComponent(agentId)}/history`,
@@ -146,11 +181,15 @@ export class MAIPClient {
   // Delegations
   // ---------------------------------------------------------------------------
 
-  async createDelegation(request: CreateDelegationRequest): Promise<Delegation> {
+  async createDelegation(
+    request: CreateDelegationRequest,
+  ): Promise<Delegation> {
     return this.request<Delegation>("POST", "/delegations", request);
   }
 
-  async listDelegations(params?: ListDelegationsParams): Promise<PaginatedResponse<Delegation>> {
+  async listDelegations(
+    params?: ListDelegationsParams,
+  ): Promise<PaginatedResponse<Delegation>> {
     return this.request<PaginatedResponse<Delegation>>(
       "GET",
       "/delegations",
@@ -159,7 +198,9 @@ export class MAIPClient {
     );
   }
 
-  async verifyDelegationChain(agentId: string): Promise<VerifyDelegationChainResponse> {
+  async verifyDelegationChain(
+    agentId: string,
+  ): Promise<VerifyDelegationChainResponse> {
     return this.request<VerifyDelegationChainResponse>(
       "GET",
       `/delegations/${encodeURIComponent(agentId)}/chain/verify`,
@@ -170,12 +211,17 @@ export class MAIPClient {
   // Audit
   // ---------------------------------------------------------------------------
 
-  async exportAuditReport(params: ExportAuditReportParams): Promise<AuditReport> {
+  async exportAuditReport(
+    params: ExportAuditReportParams,
+  ): Promise<AuditReport> {
     return this.request<AuditReport>(
       "GET",
       "/audit/report",
       undefined,
-      params as unknown as Record<string, string | number | boolean | undefined>,
+      params as unknown as Record<
+        string,
+        string | number | boolean | undefined
+      >,
     );
   }
 
@@ -194,8 +240,10 @@ export class MAIPClient {
       "Content-Type": "application/json",
       Accept: "application/json",
       "X-API-Key": this.config.apiKey,
-      "X-Tenant-ID": this.config.tenantId,
     };
+    if (this.config.tenantId && !this.config.apiKey.startsWith("tl_live_")) {
+      headers["X-Tenant-ID"] = this.config.tenantId;
+    }
 
     let lastError: Error | undefined;
 
@@ -226,7 +274,10 @@ export class MAIPClient {
           return JSON.parse(text) as T;
         }
 
-        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.maxRetries) {
+        if (
+          RETRYABLE_STATUS_CODES.has(response.status) &&
+          attempt < this.maxRetries
+        ) {
           const retryAfter = response.headers.get("Retry-After");
           if (retryAfter) {
             const retryDelaySeconds = parseInt(retryAfter, 10);
@@ -248,7 +299,8 @@ export class MAIPClient {
         } catch {
           apiError = {
             code: `HTTP_${response.status}`,
-            message: errorBody || `Request failed with status ${response.status}`,
+            message:
+              errorBody || `Request failed with status ${response.status}`,
           };
         }
 
@@ -283,7 +335,10 @@ export class MAIPClient {
       }
     }
 
-    throw lastError ?? new MAIPNetworkError("Request failed with unknown error", undefined);
+    throw (
+      lastError ??
+      new MAIPNetworkError("Request failed with unknown error", undefined)
+    );
   }
 
   private buildUrl(
