@@ -60,16 +60,26 @@ export interface ListAgentsParams {
 // ---------------------------------------------------------------------------
 
 export type ReceiptType =
+  | "genesis"
   | "action"
-  | "ml_pipeline"
-  | "data_versioning"
+  | "revocation"
   | "delegation"
-  | "audit";
+  | "data.attestation"
+  | "model.attestation"
+  | "compliance"
+  | "truth.claim"
+  | "truth.verification";
 
-export type ReceiptStatus = "PENDING" | "COMPLETE" | "FAILED";
+export type ReceiptStatus =
+  | "valid"
+  | "pending"
+  | "revoked"
+  | "expired"
+  | "superseded";
 
 export interface Receipt {
   readonly id: string;
+  readonly receipt_id: string;
   readonly tenant_id: string;
   readonly agent_id: string;
   readonly action: string;
@@ -91,7 +101,7 @@ export interface CreateReceiptRequest {
   readonly action: string;
   readonly agent_id: string;
   readonly payload: Record<string, unknown>;
-  readonly receipt_type?: ReceiptType;
+  readonly receipt_type: string;
 }
 
 export interface VerifyReceiptResponse {

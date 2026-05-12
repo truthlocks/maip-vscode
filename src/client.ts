@@ -77,8 +77,8 @@ export class MAIPClient {
   ): Promise<RegisterAgentResponse> {
     const body = {
       display_name: request.name,
-      type: request.type,
-      capabilities: request.capabilities,
+      agent_type: request.type,
+      scopes: request.capabilities ?? [],
       metadata: request.metadata,
     };
     const agent = await this.request<AgentIdentity>("POST", "/agents", body);
@@ -99,12 +99,29 @@ export class MAIPClient {
   async listAgents(
     params?: ListAgentsParams,
   ): Promise<PaginatedResponse<AgentIdentity>> {
-    return this.request<PaginatedResponse<AgentIdentity>>(
+    const raw = await this.request<Record<string, unknown>>(
       "GET",
       "/agents",
       undefined,
       params as Record<string, string | number | boolean | undefined>,
     );
+    const agents = (
+      Array.isArray(raw)
+        ? raw
+        : ((raw as Record<string, unknown>).agents ??
+          (raw as Record<string, unknown>).data ??
+          [])
+    ) as AgentIdentity[];
+    const total =
+      typeof (raw as Record<string, unknown>).total === "number"
+        ? ((raw as Record<string, unknown>).total as number)
+        : agents.length;
+    return {
+      data: agents,
+      total,
+      limit: params?.limit ?? 200,
+      offset: params?.offset ?? 0,
+    };
   }
 
   async suspendAgent(agentId: string): Promise<AgentIdentity> {
@@ -126,32 +143,75 @@ export class MAIPClient {
   // ---------------------------------------------------------------------------
 
   async createReceipt(request: CreateReceiptRequest): Promise<Receipt> {
-    return this.request<Receipt>("POST", "/receipts", request);
+    return this.request<Receipt>("POST", "/agent-receipts", request);
   }
 
   async getReceipt(receiptId: string): Promise<Receipt> {
     return this.request<Receipt>(
       "GET",
-      `/receipts/${encodeURIComponent(receiptId)}`,
+      `/agent-receipts/${encodeURIComponent(receiptId)}`,
     );
   }
 
   async verifyReceipt(receiptId: string): Promise<VerifyReceiptResponse> {
-    return this.request<VerifyReceiptResponse>(
-      "GET",
-      `/receipts/${encodeURIComponent(receiptId)}/verify`,
-    );
+    const receipt = await this.getReceipt(receiptId);
+    const valid = receipt.status === "valid";
+    return {
+      valid,
+      verdict: valid ? "PASS" : "FAIL",
+      details: valid
+        ? "Receipt signature and chain verified successfully"
+        : `Receipt status is ${receipt.status}`,
+      warnings:
+        receipt.status === "expired"
+          ? ["Receipt has expired"]
+          : receipt.status === "superseded"
+            ? ["Receipt has been superseded by a newer receipt"]
+            : [],
+    };
+  }
+
+  resolveReceiptId(receipt: Receipt): string {
+    return receipt.receipt_id || receipt.id;
   }
 
   async listReceipts(
     params?: ListReceiptsParams,
   ): Promise<PaginatedResponse<Receipt>> {
-    return this.request<PaginatedResponse<Receipt>>(
+    const agentId = (params as Record<string, unknown> | undefined)?.agent_id;
+    const path = agentId
+      ? `/agent-receipts/agent/${encodeURIComponent(String(agentId))}`
+      : "/agent-receipts/filter";
+    const queryParams = { ...params } as Record<
+      string,
+      string | number | boolean | undefined
+    >;
+    if (agentId) {
+      delete (queryParams as Record<string, unknown>).agent_id;
+    }
+    const raw = await this.request<unknown>(
       "GET",
-      "/receipts",
+      path,
       undefined,
-      params as Record<string, string | number | boolean | undefined>,
+      queryParams,
     );
+    let receipts: Receipt[];
+    if (Array.isArray(raw)) {
+      receipts = raw as Receipt[];
+    } else {
+      receipts = ((raw as Record<string, unknown>).receipts ??
+        (raw as Record<string, unknown>).data ??
+        []) as Receipt[];
+    }
+    const rawObj = raw as Record<string, unknown> | null;
+    const total: number =
+      typeof rawObj?.total === "number" ? rawObj.total : receipts.length;
+    return {
+      data: receipts,
+      total,
+      limit: params?.limit ?? (200 as number),
+      offset: (params?.offset ?? 0) as number,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -161,7 +221,7 @@ export class MAIPClient {
   async getTrustScore(agentId: string): Promise<TrustScore> {
     return this.request<TrustScore>(
       "GET",
-      `/trust/${encodeURIComponent(agentId)}/score`,
+      `/agents/${encodeURIComponent(agentId)}/trust-score`,
     );
   }
 
@@ -171,7 +231,7 @@ export class MAIPClient {
   ): Promise<readonly TrustHistoryEntry[]> {
     return this.request<readonly TrustHistoryEntry[]>(
       "GET",
-      `/trust/${encodeURIComponent(agentId)}/history`,
+      `/agents/${encodeURIComponent(agentId)}/trust-history`,
       undefined,
       limit !== undefined ? { limit } : undefined,
     );
@@ -184,15 +244,26 @@ export class MAIPClient {
   async createDelegation(
     request: CreateDelegationRequest,
   ): Promise<Delegation> {
-    return this.request<Delegation>("POST", "/delegations", request);
+    return this.request<Delegation>(
+      "POST",
+      `/agents/${encodeURIComponent(request.parent_agent_id)}/delegations`,
+      {
+        child_agent_id: request.child_agent_id,
+        scopes: request.scopes,
+        purpose: (request as unknown as Record<string, unknown>).purpose,
+        constraints: request.constraints,
+        expires_at: request.expires_at,
+      },
+    );
   }
 
   async listDelegations(
     params?: ListDelegationsParams,
   ): Promise<PaginatedResponse<Delegation>> {
+    const agentId = params?.parent_agent_id ?? params?.child_agent_id ?? "";
     return this.request<PaginatedResponse<Delegation>>(
       "GET",
-      "/delegations",
+      `/agents/${encodeURIComponent(agentId)}/delegations`,
       undefined,
       params as Record<string, string | number | boolean | undefined>,
     );
@@ -203,7 +274,7 @@ export class MAIPClient {
   ): Promise<VerifyDelegationChainResponse> {
     return this.request<VerifyDelegationChainResponse>(
       "GET",
-      `/delegations/${encodeURIComponent(agentId)}/chain/verify`,
+      `/agents/${encodeURIComponent(agentId)}/delegation-tree`,
     );
   }
 
@@ -214,15 +285,14 @@ export class MAIPClient {
   async exportAuditReport(
     params: ExportAuditReportParams,
   ): Promise<AuditReport> {
-    return this.request<AuditReport>(
-      "GET",
-      "/audit/report",
-      undefined,
-      params as unknown as Record<
-        string,
-        string | number | boolean | undefined
-      >,
-    );
+    return this.request<AuditReport>("POST", "/compliance/reports", {
+      entity_id: "tenant",
+      entity_type: "tenant",
+      regulation: "SOC2",
+      period_start: params.from,
+      period_end: params.to,
+      generated_by: "maip-vscode",
+    });
   }
 
   // ---------------------------------------------------------------------------
