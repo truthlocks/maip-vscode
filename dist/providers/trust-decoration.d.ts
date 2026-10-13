@@ -14,6 +14,7 @@ export declare class TrustDecorationProvider implements vscode.Disposable {
     private readonly scoreCache;
     private decorationTimeout;
     constructor(client: MAIPClient);
+    refresh(): void;
     private triggerUpdateDecorations;
     private updateDecorations;
     dispose(): void;

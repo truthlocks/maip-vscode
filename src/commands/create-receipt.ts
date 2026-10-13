@@ -10,14 +10,18 @@ import * as vscode from "vscode";
 import * as crypto from "crypto";
 import type { MAIPClient } from "../client";
 import type { ReceiptType } from "../types";
-import { isConfigured, getAgentId } from "../config";
+import { isConfigured, getAgentId, getSigningAlgorithm } from "../config";
 
 const RECEIPT_TYPES: readonly { label: string; value: ReceiptType }[] = [
   { label: "Action", value: "action" },
-  { label: "ML Pipeline", value: "ml_pipeline" },
-  { label: "Data Versioning", value: "data_versioning" },
+  { label: "Genesis", value: "genesis" },
   { label: "Delegation", value: "delegation" },
-  { label: "Audit", value: "audit" },
+  { label: "Revocation", value: "revocation" },
+  { label: "Data Attestation", value: "data.attestation" },
+  { label: "Model Attestation", value: "model.attestation" },
+  { label: "Compliance", value: "compliance" },
+  { label: "Truth Claim", value: "truth.claim" },
+  { label: "Truth Verification", value: "truth.verification" },
 ] as const;
 
 export function registerCreateReceiptCommand(
@@ -27,11 +31,13 @@ export function registerCreateReceiptCommand(
   return vscode.commands.registerCommand("maip.createReceipt", async () => {
     if (!isConfigured()) {
       const action = await vscode.window.showErrorMessage(
-        "MAIP is not configured. Set your API key and Tenant ID in settings.",
-        "Open Settings",
+        "MAIP is not configured. Run MAIP: Configure Credentials to connect securely.",
+        "Configure Credentials",
       );
-      if (action === "Open Settings") {
-        await vscode.commands.executeCommand("workbench.action.openSettings", "maip");
+      if (action === "Configure Credentials") {
+        await vscode.commands.executeCommand(
+          "maip.configure",
+        );
       }
       return;
     }
@@ -41,12 +47,15 @@ export function registerCreateReceiptCommand(
       const action = await vscode.window.showErrorMessage(
         "No agent ID configured for this workspace. Register an agent or set one in settings.",
         "Register Agent",
-        "Open Settings",
+        "Configure Credentials",
       );
       if (action === "Register Agent") {
         await vscode.commands.executeCommand("maip.registerAgent");
-      } else if (action === "Open Settings") {
-        await vscode.commands.executeCommand("workbench.action.openSettings", "maip.agentId");
+      } else if (action === "Configure Credentials") {
+        await vscode.commands.executeCommand(
+          "workbench.action.openSettings",
+          "maip.agentId",
+        );
       }
       return;
     }
@@ -57,7 +66,7 @@ export function registerCreateReceiptCommand(
     const hasSelection = selection && !selection.isEmpty;
     const content = hasSelection
       ? editor.document.getText(selection)
-      : editor?.document.getText() ?? "";
+      : (editor?.document.getText() ?? "");
 
     const action = await vscode.window.showInputBox({
       title: "Receipt Action",
@@ -85,7 +94,10 @@ export function registerCreateReceiptCommand(
       return;
     }
 
-    const contentHash = crypto.createHash("sha256").update(content, "utf8").digest("hex");
+    const contentHash = crypto
+      .createHash("sha256")
+      .update(content, "utf8")
+      .digest("hex");
 
     const payload: Record<string, unknown> = {
       file: fileName,
@@ -110,20 +122,24 @@ export function registerCreateReceiptCommand(
           const receipt = await client.createReceipt({
             action: action.trim(),
             agent_id: agentId,
-            payload,
+            payload: { ...payload, requested_algorithm: getSigningAlgorithm() },
             receipt_type: typeItem.value,
           });
 
+          const receiptDisplayId = receipt.receipt_id || receipt.id;
           const userAction = await vscode.window.showInformationMessage(
-            `Receipt created: ${receipt.id} (${receipt.status})`,
+            `Receipt created: ${receiptDisplayId} (${receipt.status})`,
             "View Details",
             "Copy ID",
           );
 
           if (userAction === "View Details") {
-            await vscode.commands.executeCommand("maip.verifyReceipt", receipt.id);
+            await vscode.commands.executeCommand(
+              "maip.verifyReceipt",
+              receiptDisplayId,
+            );
           } else if (userAction === "Copy ID") {
-            await vscode.env.clipboard.writeText(receipt.id);
+            await vscode.env.clipboard.writeText(receiptDisplayId);
           }
 
           refreshCallback();
@@ -131,7 +147,9 @@ export function registerCreateReceiptCommand(
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      vscode.window.showErrorMessage(`MAIP: Failed to create receipt: ${message}`);
+      vscode.window.showErrorMessage(
+        `MAIP: Failed to create receipt: ${message}`,
+      );
     }
   });
 }

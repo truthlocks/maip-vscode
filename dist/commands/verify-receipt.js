@@ -44,13 +44,13 @@ exports.registerVerifyReceiptCommand = registerVerifyReceiptCommand;
 const vscode = __importStar(require("vscode"));
 const config_1 = require("../config");
 const receipt_detail_1 = require("../views/receipt-detail");
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RECEIPT_ID_PATTERN = /^(maip-receipt:[0-9a-z]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 function registerVerifyReceiptCommand(client, extensionUri) {
     return vscode.commands.registerCommand("maip.verifyReceipt", async (receiptIdArg) => {
         if (!(0, config_1.isConfigured)()) {
-            const action = await vscode.window.showErrorMessage("MAIP is not configured. Set your API key and Tenant ID in settings.", "Open Settings");
-            if (action === "Open Settings") {
-                await vscode.commands.executeCommand("workbench.action.openSettings", "maip");
+            const action = await vscode.window.showErrorMessage("MAIP is not configured. Run MAIP: Configure Credentials to connect securely.", "Configure Credentials");
+            if (action === "Configure Credentials") {
+                await vscode.commands.executeCommand("maip.configure");
             }
             return;
         }
@@ -59,13 +59,13 @@ function registerVerifyReceiptCommand(client, extensionUri) {
             receiptId = await vscode.window.showInputBox({
                 title: "Receipt ID",
                 prompt: "Enter the receipt ID to verify",
-                placeHolder: "e.g., a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                placeHolder: "e.g., maip-receipt:01abc123...",
                 validateInput: (value) => {
                     if (!value || value.trim().length === 0) {
                         return "Receipt ID is required";
                     }
-                    if (!UUID_PATTERN.test(value.trim())) {
-                        return "Receipt ID must be a valid UUID";
+                    if (!RECEIPT_ID_PATTERN.test(value.trim())) {
+                        return "Receipt ID must be maip-receipt:... or UUID format";
                     }
                     return undefined;
                 },

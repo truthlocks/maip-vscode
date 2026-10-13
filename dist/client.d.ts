@@ -6,7 +6,7 @@
  * Uses native fetch (Node 18+ built into VS Code runtime).
  * Implements retry with exponential backoff on 429/5xx.
  */
-import type { MAIPConfig, ApiError, AgentIdentity, RegisterAgentRequest, RegisterAgentResponse, ListAgentsParams, Receipt, CreateReceiptRequest, VerifyReceiptResponse, ListReceiptsParams, TrustScore, TrustHistoryEntry, Delegation, ListDelegationsParams, CreateDelegationRequest, VerifyDelegationChainResponse, AuditReport, ExportAuditReportParams, PaginatedResponse } from "./types";
+import type { MAIPConfig, ApiError, AgentIdentity, RegisterAgentRequest, RegisterAgentResponse, ListAgentsParams, Receipt, CreateReceiptRequest, VerifyReceiptResponse, ListReceiptsParams, TrustScore, TrustHistoryEntry, Delegation, ListDelegationsParams, CreateDelegationRequest, VerifyDelegationChainResponse, AgentEvidenceSnapshot, PaginatedResponse } from "./types";
 export declare class MAIPApiError extends Error {
     readonly statusCode: number;
     readonly errorCode: string;
@@ -18,10 +18,11 @@ export declare class MAIPNetworkError extends Error {
     constructor(message: string, cause: unknown);
 }
 export declare class MAIPClient {
-    private readonly config;
-    private readonly maxRetries;
-    private readonly timeoutMs;
+    private config;
+    private maxRetries;
+    private timeoutMs;
     constructor(config: MAIPConfig);
+    updateConfig(config: MAIPConfig): void;
     registerAgent(request: RegisterAgentRequest): Promise<RegisterAgentResponse>;
     getAgent(agentId: string): Promise<AgentIdentity>;
     listAgents(params?: ListAgentsParams): Promise<PaginatedResponse<AgentIdentity>>;
@@ -30,13 +31,14 @@ export declare class MAIPClient {
     createReceipt(request: CreateReceiptRequest): Promise<Receipt>;
     getReceipt(receiptId: string): Promise<Receipt>;
     verifyReceipt(receiptId: string): Promise<VerifyReceiptResponse>;
+    resolveReceiptId(receipt: Receipt): string;
     listReceipts(params?: ListReceiptsParams): Promise<PaginatedResponse<Receipt>>;
     getTrustScore(agentId: string): Promise<TrustScore>;
     getTrustHistory(agentId: string, limit?: number): Promise<readonly TrustHistoryEntry[]>;
     createDelegation(request: CreateDelegationRequest): Promise<Delegation>;
     listDelegations(params?: ListDelegationsParams): Promise<PaginatedResponse<Delegation>>;
     verifyDelegationChain(agentId: string): Promise<VerifyDelegationChainResponse>;
-    exportAuditReport(params: ExportAuditReportParams): Promise<AuditReport>;
+    exportAuditReport(agentId: string): Promise<AgentEvidenceSnapshot>;
     private request;
     private buildUrl;
     private calculateDelay;

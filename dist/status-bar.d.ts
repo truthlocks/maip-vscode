@@ -2,7 +2,7 @@
  * @license Apache-2.0
  * Copyright 2026 Truthlocks Inc.
  *
- * Status bar item showing MAIP connection status and trust score.
+ * Status bar item showing MAIP connection status and server trust score.
  * Left-aligned. Click opens the trust dashboard webview.
  */
 import * as vscode from "vscode";
@@ -16,6 +16,7 @@ export declare class MAIPStatusBar implements vscode.Disposable {
     get lastTrustScore(): number | undefined;
     constructor(client: MAIPClient);
     private startPolling;
+    refresh(): void;
     private updateStatus;
     private fetchTrustScore;
     dispose(): void;

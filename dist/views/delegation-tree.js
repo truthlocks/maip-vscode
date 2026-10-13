@@ -71,7 +71,7 @@ class DelegationTreePanel {
                 location: vscode.ProgressLocation.Notification,
                 title: "MAIP: Loading delegation tree...",
                 cancellable: false,
-            }, async () => client.listDelegations({ limit: 200 }));
+            }, async () => client.listDelegations({ parent_agent_id: agentId }));
             if (DelegationTreePanel.currentPanel) {
                 DelegationTreePanel.currentPanel.panel.reveal(column);
                 DelegationTreePanel.currentPanel.panel.webview.html =
@@ -155,11 +155,11 @@ class DelegationTreePanel {
 </head>
 <body>
   <h1>Delegation Tree</h1>
-  <div class="subtitle">Root agent: ${escapeHtml(rootAgentId)}</div>
+  <div class="subtitle">Agent: ${escapeHtml(rootAgentId)}. Shows direct relationships only; this is not cryptographic chain verification.</div>
 
   <div class="tree-container">${treeSvg}</div>
 
-  <h2>All Delegations (${delegations.length})</h2>
+  <h2>Direct Delegations (${delegations.length})</h2>
   ${tableHtml}
 </body>
 </html>`;
@@ -177,8 +177,9 @@ function buildTree(delegations, rootAgentId) {
             childMap.set(d.parent_agent_id, [d]);
         }
     }
-    function buildNode(agentId, depth) {
-        const children = (childMap.get(agentId) ?? []).map((d) => buildNode(d.child_agent_id, depth + 1));
+    function buildNode(agentId, depth, ancestors = new Set()) {
+        const seen = new Set(ancestors).add(agentId);
+        const children = depth >= 32 ? [] : (childMap.get(agentId) ?? []).filter((d) => !seen.has(d.child_agent_id)).map((d) => buildNode(d.child_agent_id, depth + 1, seen));
         return {
             agentId,
             displayName: agentId.substring(0, 8),
@@ -276,7 +277,9 @@ function formatDate(iso) {
     }
 }
 function escapeHtml(text) {
-    return text
+    if (text === null || text === undefined)
+        return "";
+    return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")

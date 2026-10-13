@@ -10,7 +10,7 @@ import * as vscode from "vscode";
 import type { MAIPClient } from "../client";
 import { isConfigured } from "../config";
 
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const AGENT_REGEX = /maip:[a-z0-9]{8}:[a-z0-9]{26}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 interface CachedHover {
   readonly markdown: vscode.MarkdownString;
@@ -24,6 +24,8 @@ export class MAIPHoverProvider implements vscode.HoverProvider {
 
   constructor(private readonly client: MAIPClient) {}
 
+  clearCache(): void { this.hoverCache.clear(); }
+
   async provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
@@ -33,12 +35,12 @@ export class MAIPHoverProvider implements vscode.HoverProvider {
       return undefined;
     }
 
-    const range = document.getWordRangeAtPosition(position, UUID_REGEX);
+    const range = document.getWordRangeAtPosition(position, AGENT_REGEX);
     if (!range) {
       return undefined;
     }
 
-    const uuid = document.getText(range).toLowerCase();
+    const uuid = document.getText(range);
 
     const now = Date.now();
     const cached = this.hoverCache.get(uuid);
@@ -57,33 +59,24 @@ export class MAIPHoverProvider implements vscode.HoverProvider {
       if (agent.status === "fulfilled") {
         const a = agent.value;
         parts.push(
-          `### MAIP Agent: ${a.display_name}\n`,
-          `| Field | Value |`,
-          `|---|---|`,
-          `| **ID** | \`${a.agent_id}\` |`,
-          `| **Status** | ${a.status} |`,
-          `| **Trust Level** | ${a.trust_level} |`,
-          `| **Capabilities** | ${a.capabilities.length > 0 ? a.capabilities.join(", ") : "none"} |`,
-          `| **Max Delegation** | ${a.max_delegation_depth} |`,
-          `| **Created** | ${a.created_at} |`,
+          `### MAIP Agent: ${escapeMarkdown(a.display_name)}\n`,
+          `- ID: ${escapeMarkdown(a.agent_id)}`,
+          `- Status: ${escapeMarkdown(a.status)}`,
+          `- Trust level: ${escapeMarkdown(a.trust_level)}`,
+          `- Scopes: ${escapeMarkdown((a.scopes ?? a.capabilities ?? []).join(", ") || "none")}`,
+          `- Delegation depth: ${a.delegation_depth ?? a.max_delegation_depth ?? "Not provided"}`,
+          `- Created: ${escapeMarkdown(a.created_at)}`,
         );
       }
 
       if (trustScore.status === "fulfilled") {
         const t = trustScore.value;
-        const scoreBar = renderScoreBar(t.trust_score);
-        parts.push(
-          `\n### Trust Score\n`,
-          `${scoreBar} **${t.trust_score.toFixed(4)}** / ${t.trust_ceiling.toFixed(2)}\n`,
-          `| Component | Score |`,
-          `|---|---|`,
-          `| Reputation | ${t.score_components.reputation.toFixed(3)} |`,
-          `| Key Health | ${t.score_components.key_health.toFixed(3)} |`,
-          `| Delegation Depth | ${t.score_components.delegation_depth.toFixed(3)} |`,
-          `| Verification History | ${t.score_components.verification_history.toFixed(3)} |`,
-          `| Multi-Witness | ${t.score_components.multi_witness.toFixed(3)} |`,
-          `| Anomaly Penalty | ${t.score_components.anomaly_penalty.toFixed(3)} |`,
-        );
+        parts.push(`\n### Trust Score\n`, `${renderScoreBar(t.trust_score)} **${t.trust_score.toFixed(4)}** / 1`);
+        const factors = Object.entries(t.factors ?? t.score_components ?? {});
+        for (const [name, value] of factors) {
+          parts.push(`- ${escapeMarkdown(name)}: ${escapeMarkdown(typeof value === "number" ? value.toFixed(3) : JSON.stringify(value))}`);
+        }
+        if (!factors.length) parts.push("No score factors were provided by the service.");
       }
 
       if (parts.length === 0) {
@@ -96,7 +89,7 @@ export class MAIPHoverProvider implements vscode.HoverProvider {
       );
 
       const markdown = new vscode.MarkdownString(parts.join("\n"));
-      markdown.isTrusted = true;
+      markdown.isTrusted = { enabledCommands: ["maip.showTrustScore"] };
       markdown.supportHtml = false;
 
       this.hoverCache.set(uuid, { markdown, expiresAt: now + CACHE_TTL_MS });
@@ -109,7 +102,7 @@ export class MAIPHoverProvider implements vscode.HoverProvider {
 }
 
 function renderScoreBar(score: number): string {
-  const filled = Math.round(score * 10);
+  const filled = Math.round(Math.max(0, Math.min(1, Number.isFinite(score) ? score : 0)) * 10);
   const empty = 10 - filled;
   const bar = "\u2588".repeat(filled) + "\u2591".repeat(empty);
 
@@ -120,4 +113,8 @@ function renderScoreBar(score: number): string {
     return bar;
   }
   return bar;
+}
+
+function escapeMarkdown(value: unknown): string {
+  return String(value ?? "").replace(/[\\`*_{}[\]()<>#+.!|~]/g, "\\$&").replace(/[\r\n]/g, " ");
 }

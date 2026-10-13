@@ -27,7 +27,9 @@ class AgentItem {
 const STATUS_ORDER: readonly AgentStatus[] = ["active", "suspended", "revoked"];
 
 export class AgentTreeProvider implements vscode.TreeDataProvider<TreeElement> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<TreeElement | undefined | null>();
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<
+    TreeElement | undefined | null
+  >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private agents: readonly AgentWithTrust[] = [];
@@ -55,16 +57,19 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeElement> {
     }
 
     const { agent, trustScore } = element.data;
-    const item = new vscode.TreeItem(agent.display_name, vscode.TreeItemCollapsibleState.None);
-    item.description = `${agent.agent_id.substring(0, 8)} | Trust: ${trustScore.toFixed(2)}`;
+    const item = new vscode.TreeItem(
+      agent.display_name,
+      vscode.TreeItemCollapsibleState.None,
+    );
+    item.description = `${agent.agent_id.substring(0, 8)} | Trust: ${trustScore?.toFixed(2) ?? "Unavailable"}`;
     item.tooltip = new vscode.MarkdownString(
       `**${agent.display_name}**\n\n` +
         `- **ID:** \`${agent.agent_id}\`\n` +
         `- **Type:** ${agent.trust_level}\n` +
         `- **Status:** ${agent.status}\n` +
-        `- **Trust Score:** ${trustScore.toFixed(4)}\n` +
-        `- **Capabilities:** ${agent.capabilities.length > 0 ? agent.capabilities.join(", ") : "none"}\n` +
-        `- **Delegation Depth:** ${agent.max_delegation_depth}\n` +
+        `- **Trust Score:** ${trustScore?.toFixed(4) ?? "Unavailable"}\n` +
+        `- **Capabilities:** ${(agent.scopes ?? agent.capabilities ?? []).join(", ") || "none"}\n` +
+        `- **Delegation Depth:** ${agent.delegation_depth ?? agent.max_delegation_depth ?? "Not provided"}\n` +
         `- **Created:** ${agent.created_at}\n`,
     );
     item.iconPath = trustScoreIcon(trustScore);
@@ -111,9 +116,9 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeElement> {
       }
     }
 
-    return STATUS_ORDER
-      .map((status) => new AgentStatusGroup(status, grouped.get(status) ?? []))
-      .filter((g) => g.agents.length > 0);
+    return STATUS_ORDER.map(
+      (status) => new AgentStatusGroup(status, grouped.get(status) ?? []),
+    ).filter((g) => g.agents.length > 0);
   }
 
   private async loadAgents(): Promise<void> {
@@ -127,7 +132,7 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeElement> {
           const trust = await this.client.getTrustScore(agent.agent_id);
           return { agent, trustScore: trust.trust_score };
         } catch {
-          return { agent, trustScore: 0 };
+          return { agent, trustScore: null };
         }
       });
 
@@ -154,20 +159,39 @@ function capitalize(s: string): string {
 function statusGroupIcon(status: AgentStatus): vscode.ThemeIcon {
   switch (status) {
     case "active":
-      return new vscode.ThemeIcon("check-all", new vscode.ThemeColor("testing.iconPassed"));
+      return new vscode.ThemeIcon(
+        "check-all",
+        new vscode.ThemeColor("testing.iconPassed"),
+      );
     case "suspended":
-      return new vscode.ThemeIcon("warning", new vscode.ThemeColor("editorWarning.foreground"));
+      return new vscode.ThemeIcon(
+        "warning",
+        new vscode.ThemeColor("editorWarning.foreground"),
+      );
     case "revoked":
-      return new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("testing.iconFailed"));
+      return new vscode.ThemeIcon(
+        "circle-slash",
+        new vscode.ThemeColor("testing.iconFailed"),
+      );
   }
 }
 
-function trustScoreIcon(score: number): vscode.ThemeIcon {
+function trustScoreIcon(score: number | null): vscode.ThemeIcon {
+  if (score === null) return new vscode.ThemeIcon("question");
   if (score >= 0.8) {
-    return new vscode.ThemeIcon("verified-filled", new vscode.ThemeColor("testing.iconPassed"));
+    return new vscode.ThemeIcon(
+      "verified-filled",
+      new vscode.ThemeColor("testing.iconPassed"),
+    );
   }
   if (score >= 0.5) {
-    return new vscode.ThemeIcon("unverified", new vscode.ThemeColor("editorWarning.foreground"));
+    return new vscode.ThemeIcon(
+      "unverified",
+      new vscode.ThemeColor("editorWarning.foreground"),
+    );
   }
-  return new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("testing.iconFailed"));
+  return new vscode.ThemeIcon(
+    "circle-slash",
+    new vscode.ThemeColor("testing.iconFailed"),
+  );
 }

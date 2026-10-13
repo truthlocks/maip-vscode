@@ -2,7 +2,7 @@
  * @license Apache-2.0
  * Copyright 2026 Truthlocks Inc.
  *
- * Status bar item showing MAIP connection status and trust score.
+ * Status bar item showing MAIP connection status and server trust score.
  * Left-aligned. Click opens the trust dashboard webview.
  */
 
@@ -11,6 +11,7 @@ import type { MAIPClient } from "./client";
 import { isConfigured, getAgentId } from "./config";
 
 const POLL_INTERVAL_MS = 60_000;
+
 
 export class MAIPStatusBar implements vscode.Disposable {
   private readonly statusBarItem: vscode.StatusBarItem;
@@ -34,7 +35,7 @@ export class MAIPStatusBar implements vscode.Disposable {
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
-          event.affectsConfiguration("maip.apiKey") ||
+          event.affectsConfiguration("maip.apiUrl") ||
           event.affectsConfiguration("maip.tenantId") ||
           event.affectsConfiguration("maip.agentId")
         ) {
@@ -54,23 +55,23 @@ export class MAIPStatusBar implements vscode.Disposable {
     }, POLL_INTERVAL_MS);
   }
 
+  refresh(): void { this.updateStatus(); }
+
   private updateStatus(): void {
+    this._lastTrustScore = undefined;
     if (!isConfigured()) {
       this.statusBarItem.text = "$(shield) MAIP: Not Configured";
       this.statusBarItem.tooltip = "Click to configure MAIP settings";
       this.statusBarItem.backgroundColor = undefined;
-      this.statusBarItem.command = {
-        command: "workbench.action.openSettings",
-        title: "Open MAIP Settings",
-        arguments: ["maip"],
-      };
+      this.statusBarItem.command = "maip.configure";
       return;
     }
 
     const agentId = getAgentId();
     if (!agentId) {
       this.statusBarItem.text = "$(shield) MAIP: No Agent";
-      this.statusBarItem.tooltip = "No agent configured. Register one or set an agent ID.";
+      this.statusBarItem.tooltip =
+        "No agent configured. Register one or set an agent ID.";
       this.statusBarItem.backgroundColor = undefined;
       this.statusBarItem.command = "maip.registerAgent";
       return;
@@ -117,12 +118,13 @@ export class MAIPStatusBar implements vscode.Disposable {
           `- Agent: \`${agentId.substring(0, 8)}...\`\n` +
           `- Trust Score: ${score.toFixed(4)}\n` +
           `- Level: ${trustScore.trust_level}\n` +
-          `- Computed: ${trustScore.computed_at}\n\n` +
+          `- Computed: ${trustScore.computed_at ?? "Not provided"}\n\n` +
           `Click to open Trust Dashboard`,
       );
     } catch {
       this.statusBarItem.text = "$(shield) MAIP: Disconnected";
-      this.statusBarItem.tooltip = "Unable to connect to MAIP API. Check your settings.";
+      this.statusBarItem.tooltip =
+        "Unable to connect to MAIP API. Check your settings.";
       this.statusBarItem.backgroundColor = new vscode.ThemeColor(
         "statusBarItem.warningBackground",
       );

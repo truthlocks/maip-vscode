@@ -32,7 +32,9 @@ class ReceiptItem {
 }
 
 export class ReceiptTreeProvider implements vscode.TreeDataProvider<TreeElement> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<TreeElement | undefined | null>();
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<
+    TreeElement | undefined | null
+  >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private receipts: readonly Receipt[] = [];
@@ -71,11 +73,15 @@ export class ReceiptTreeProvider implements vscode.TreeDataProvider<TreeElement>
     }
 
     const r = element.receipt;
-    const item = new vscode.TreeItem(r.action, vscode.TreeItemCollapsibleState.None);
-    item.description = `${r.id.substring(0, 8)} - ${r.status}`;
+    const item = new vscode.TreeItem(
+      r.purpose || r.action || r.receipt_type,
+      vscode.TreeItemCollapsibleState.None,
+    );
+    const displayId = r.receipt_id || r.id;
+    item.description = `${displayId.substring(0, 16)} - ${r.status}`;
     item.tooltip = new vscode.MarkdownString(
-      `**Receipt** \`${r.id}\`\n\n` +
-        `- **Action:** ${r.action}\n` +
+      `**Receipt** \`${displayId}\`\n\n` +
+        `- **Action:** ${r.purpose || r.action || r.receipt_type}\n` +
         `- **Type:** ${r.receipt_type}\n` +
         `- **Status:** ${r.status}\n` +
         `- **Agent:** \`${r.agent_id}\`\n` +
@@ -86,7 +92,7 @@ export class ReceiptTreeProvider implements vscode.TreeDataProvider<TreeElement>
     item.command = {
       command: "maip.verifyReceipt",
       title: "Verify Receipt",
-      arguments: [r.id],
+      arguments: [displayId],
     };
     return item;
   }
@@ -184,29 +190,56 @@ function formatDateKey(iso: string): string {
 
 function typeIcon(receiptType: string): vscode.ThemeIcon {
   switch (receiptType) {
+    case "genesis":
+      return new vscode.ThemeIcon("star-full");
     case "action":
       return new vscode.ThemeIcon("play");
-    case "ml_pipeline":
-      return new vscode.ThemeIcon("beaker");
-    case "data_versioning":
-      return new vscode.ThemeIcon("database");
+    case "revocation":
+      return new vscode.ThemeIcon("circle-slash");
     case "delegation":
       return new vscode.ThemeIcon("organization");
-    case "audit":
+    case "data.attestation":
+      return new vscode.ThemeIcon("database");
+    case "model.attestation":
+      return new vscode.ThemeIcon("beaker");
+    case "compliance":
       return new vscode.ThemeIcon("shield");
+    case "truth.claim":
+      return new vscode.ThemeIcon("lightbulb");
+    case "truth.verification":
+      return new vscode.ThemeIcon("verified");
     default:
       return new vscode.ThemeIcon("file");
   }
 }
 
 function statusIcon(status: string): vscode.ThemeIcon {
-  switch (status) {
-    case "COMPLETE":
-      return new vscode.ThemeIcon("check", new vscode.ThemeColor("testing.iconPassed"));
-    case "PENDING":
-      return new vscode.ThemeIcon("clock", new vscode.ThemeColor("editorWarning.foreground"));
-    case "FAILED":
-      return new vscode.ThemeIcon("error", new vscode.ThemeColor("testing.iconFailed"));
+  switch (status.toLowerCase()) {
+    case "valid":
+      return new vscode.ThemeIcon(
+        "check",
+        new vscode.ThemeColor("testing.iconPassed"),
+      );
+    case "pending":
+      return new vscode.ThemeIcon(
+        "clock",
+        new vscode.ThemeColor("editorWarning.foreground"),
+      );
+    case "revoked":
+      return new vscode.ThemeIcon(
+        "circle-slash",
+        new vscode.ThemeColor("testing.iconFailed"),
+      );
+    case "expired":
+      return new vscode.ThemeIcon(
+        "history",
+        new vscode.ThemeColor("editorWarning.foreground"),
+      );
+    case "superseded":
+      return new vscode.ThemeIcon(
+        "arrow-swap",
+        new vscode.ThemeColor("descriptionForeground"),
+      );
     default:
       return new vscode.ThemeIcon("question");
   }

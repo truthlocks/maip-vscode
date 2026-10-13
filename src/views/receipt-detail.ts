@@ -45,7 +45,7 @@ export class ReceiptDetailPanel {
 
     const panel = vscode.window.createWebviewPanel(
       "maip.receiptDetail",
-      `Receipt: ${receipt.id.substring(0, 8)}`,
+      `Receipt: ${(receipt.receipt_id || receipt.id).substring(0, 20)}`,
       column ?? vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -70,13 +70,16 @@ export class ReceiptDetailPanel {
     this.disposables = [];
   }
 
-  private getHtml(receipt: Receipt, verification: VerifyReceiptResponse): string {
+  private getHtml(
+    receipt: Receipt,
+    verification: VerifyReceiptResponse,
+  ): string {
     const nonce = crypto.randomBytes(16).toString("hex");
 
     const verifyClass = verification.valid ? "verify-valid" : "verify-invalid";
     const verifyIcon = verification.valid ? "&#10003;" : "&#10007;";
 
-    const payloadJson = JSON.stringify(receipt.payload, null, 2);
+    const payloadJson = JSON.stringify(receipt.metadata ?? receipt.payload ?? {}, null, 2);
 
     const warnings =
       verification.warnings.length > 0
@@ -158,7 +161,7 @@ export class ReceiptDetailPanel {
 </head>
 <body>
   <h1>Receipt Detail</h1>
-  <div class="subtitle">${escapeHtml(receipt.id)}</div>
+  <div class="subtitle">${escapeHtml(receipt.receipt_id || receipt.id)}</div>
 
   <div class="verify-badge ${verifyClass}">
     <span>${verifyIcon}</span>
@@ -168,7 +171,7 @@ export class ReceiptDetailPanel {
   <h2>Receipt Fields</h2>
   <div class="field-grid">
     <span class="field-label">ID</span>
-    <span class="field-value mono">${escapeHtml(receipt.id)}</span>
+    <span class="field-value mono">${escapeHtml(receipt.receipt_id || receipt.id)}</span>
 
     <span class="field-label">Action</span>
     <span class="field-value">${escapeHtml(receipt.action)}</span>
@@ -235,8 +238,8 @@ export class ReceiptDetailPanel {
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const receiptId = ${JSON.stringify(receipt.id)};
-    const receiptJson = ${JSON.stringify(JSON.stringify(receipt, null, 2))};
+    const receiptId = ${JSON.stringify(receipt.receipt_id || receipt.id)};
+    const receiptJson = ${JSON.stringify(JSON.stringify(receipt, null, 2)).replace(/</g, "\\u003c")};
 
     function copyId() {
       vscode.postMessage({ command: 'copy', text: receiptId });
@@ -250,8 +253,11 @@ export class ReceiptDetailPanel {
   }
 }
 
-function escapeHtml(text: string): string {
-  return text
+function escapeHtml(text: unknown): string {
+  if (text === null || text === undefined) {
+    return "";
+  }
+  return String(text)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

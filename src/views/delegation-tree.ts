@@ -45,7 +45,9 @@ export class DelegationTreePanel {
 
     const agentId = getAgentId();
     if (!agentId) {
-      vscode.window.showErrorMessage("No agent ID configured for this workspace.");
+      vscode.window.showErrorMessage(
+        "No agent ID configured for this workspace.",
+      );
       return;
     }
 
@@ -60,7 +62,7 @@ export class DelegationTreePanel {
           title: "MAIP: Loading delegation tree...",
           cancellable: false,
         },
-        async () => client.listDelegations({ limit: 200 }),
+        async () => client.listDelegations({ parent_agent_id: agentId }),
       );
 
       if (DelegationTreePanel.currentPanel) {
@@ -80,10 +82,16 @@ export class DelegationTreePanel {
         },
       );
 
-      DelegationTreePanel.currentPanel = new DelegationTreePanel(panel, result.data, agentId);
+      DelegationTreePanel.currentPanel = new DelegationTreePanel(
+        panel,
+        result.data,
+        agentId,
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      vscode.window.showErrorMessage(`MAIP: Failed to load delegations: ${message}`);
+      vscode.window.showErrorMessage(
+        `MAIP: Failed to load delegations: ${message}`,
+      );
     }
   }
 
@@ -96,7 +104,10 @@ export class DelegationTreePanel {
     this.disposables = [];
   }
 
-  private getHtml(delegations: readonly Delegation[], rootAgentId: string): string {
+  private getHtml(
+    delegations: readonly Delegation[],
+    rootAgentId: string,
+  ): string {
     const nonce = crypto.randomBytes(16).toString("hex");
     const tree = buildTree(delegations, rootAgentId);
     const treeSvg = renderTreeSvg(tree);
@@ -155,18 +166,21 @@ export class DelegationTreePanel {
 </head>
 <body>
   <h1>Delegation Tree</h1>
-  <div class="subtitle">Root agent: ${escapeHtml(rootAgentId)}</div>
+  <div class="subtitle">Agent: ${escapeHtml(rootAgentId)}. Shows direct relationships only; this is not cryptographic chain verification.</div>
 
   <div class="tree-container">${treeSvg}</div>
 
-  <h2>All Delegations (${delegations.length})</h2>
+  <h2>Direct Delegations (${delegations.length})</h2>
   ${tableHtml}
 </body>
 </html>`;
   }
 }
 
-function buildTree(delegations: readonly Delegation[], rootAgentId: string): DelegationNode {
+function buildTree(
+  delegations: readonly Delegation[],
+  rootAgentId: string,
+): DelegationNode {
   const childMap = new Map<string, Delegation[]>();
 
   for (const d of delegations) {
@@ -178,9 +192,10 @@ function buildTree(delegations: readonly Delegation[], rootAgentId: string): Del
     }
   }
 
-  function buildNode(agentId: string, depth: number): DelegationNode {
-    const children = (childMap.get(agentId) ?? []).map((d) =>
-      buildNode(d.child_agent_id, depth + 1),
+  function buildNode(agentId: string, depth: number, ancestors = new Set<string>()): DelegationNode {
+    const seen = new Set(ancestors).add(agentId);
+    const children = depth >= 32 ? [] : (childMap.get(agentId) ?? []).filter((d) => !seen.has(d.child_agent_id)).map((d) =>
+      buildNode(d.child_agent_id, depth + 1, seen),
     );
     return {
       agentId,
@@ -312,8 +327,9 @@ function formatDate(iso: string): string {
   }
 }
 
-function escapeHtml(text: string): string {
-  return text
+function escapeHtml(text: unknown): string {
+  if (text === null || text === undefined) return "";
+  return String(text)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

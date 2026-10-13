@@ -54,7 +54,7 @@ vi.mock("vscode", () => {
     getConfiguration: vi.fn(() => ({
       get: vi.fn((key: string, defaultValue: unknown) => {
         const values: Record<string, unknown> = {
-          apiUrl: "https://api.test.com/v1/machine-identity",
+          apiUrl: "https://api.test.com/v1",
           apiKey: "test-api-key",
           tenantId: "test-tenant",
           agentId: "test-agent-id",
@@ -147,9 +147,19 @@ describe("MAIP Extension", () => {
       subscriptions: [],
       extensionUri: vscode.Uri.file("/test/extension"),
       extensionPath: "/test/extension",
-      globalState: { get: vi.fn(), update: vi.fn(), keys: vi.fn(() => []), setKeysForSync: vi.fn() },
+      globalState: {
+        get: vi.fn(),
+        update: vi.fn(),
+        keys: vi.fn(() => []),
+        setKeysForSync: vi.fn(),
+      },
       workspaceState: { get: vi.fn(), update: vi.fn(), keys: vi.fn(() => []) },
-      secrets: { get: vi.fn(), store: vi.fn(), delete: vi.fn(), onDidChange: vi.fn() },
+      secrets: {
+        get: vi.fn(),
+        store: vi.fn(),
+        delete: vi.fn(),
+        onDidChange: vi.fn(),
+      },
       storageUri: undefined,
       globalStorageUri: vscode.Uri.file("/test/global"),
       logUri: vscode.Uri.file("/test/log"),
@@ -157,22 +167,27 @@ describe("MAIP Extension", () => {
       globalStoragePath: "/test/global",
       logPath: "/test/log",
       asAbsolutePath: vi.fn((p: string) => `/test/extension/${p}`),
-      environmentVariableCollection: {} as unknown as vscode.GlobalEnvironmentVariableCollection,
+      environmentVariableCollection:
+        {} as unknown as vscode.GlobalEnvironmentVariableCollection,
       extensionMode: 3,
       extension: {} as unknown as vscode.Extension<unknown>,
-      languageModelAccessInformation: {} as unknown as vscode.LanguageModelAccessInformation,
+      languageModelAccessInformation:
+        {} as unknown as vscode.LanguageModelAccessInformation,
     } as unknown as vscode.ExtensionContext;
   });
 
-  it("should activate and register all commands", () => {
-    activate(context);
+  it("should activate and register all commands", async () => {
+    await activate(context);
 
-    // 6 commands from individual modules + 2 from extension.ts (refresh + delegation)
-    const registerCommandCalls = vi.mocked(vscode.commands.registerCommand).mock.calls;
-    expect(registerCommandCalls.length).toBe(8);
+    // Includes registration and sign-out as well as the workspace commands.
+    const registerCommandCalls = vi.mocked(vscode.commands.registerCommand).mock
+      .calls;
+    expect(registerCommandCalls.length).toBe(12);
 
     // Check that specific commands were registered
     const registeredCommands = registerCommandCalls.map(([cmd]) => cmd);
+    expect(registeredCommands).toContain("maip.register");
+    expect(registeredCommands).toContain("maip.signOut");
     expect(registeredCommands).toContain("maip.registerAgent");
     expect(registeredCommands).toContain("maip.createReceipt");
     expect(registeredCommands).toContain("maip.verifyReceipt");
@@ -183,10 +198,11 @@ describe("MAIP Extension", () => {
     expect(registeredCommands).toContain("maip.showDelegationTree");
   });
 
-  it("should register tree data providers", () => {
-    activate(context);
+  it("should register tree data providers", async () => {
+    await activate(context);
 
-    const treeProviderCalls = vi.mocked(vscode.window.registerTreeDataProvider).mock.calls;
+    const treeProviderCalls = vi.mocked(vscode.window.registerTreeDataProvider)
+      .mock.calls;
     expect(treeProviderCalls.length).toBe(2);
 
     const registeredViews = treeProviderCalls.map(([viewId]) => viewId);
@@ -194,33 +210,43 @@ describe("MAIP Extension", () => {
     expect(registeredViews).toContain("maip.agents");
   });
 
-  it("should register hover providers", () => {
-    activate(context);
+  it("should register hover providers", async () => {
+    await activate(context);
 
-    const hoverCalls = vi.mocked(vscode.languages.registerHoverProvider).mock.calls;
+    const hoverCalls = vi.mocked(vscode.languages.registerHoverProvider).mock
+      .calls;
     expect(hoverCalls.length).toBe(2);
 
-    const schemes = hoverCalls.map(([selector]) => (selector as { scheme: string }).scheme);
+    const schemes = hoverCalls.map(
+      ([selector]) => (selector as { scheme: string }).scheme,
+    );
     expect(schemes).toContain("file");
     expect(schemes).toContain("untitled");
   });
 
-  it("should create status bar item", () => {
-    activate(context);
+  it("should create status bar item", async () => {
+    await activate(context);
     expect(vscode.window.createStatusBarItem).toHaveBeenCalled();
   });
 
-  it("should create output channel", () => {
-    activate(context);
+  it("should create output channel", async () => {
+    await activate(context);
     expect(vscode.window.createOutputChannel).toHaveBeenCalledWith("MAIP");
   });
 
-  it("should add disposables to subscriptions", () => {
-    activate(context);
+  it("should add disposables to subscriptions", async () => {
+    await activate(context);
     expect(context.subscriptions.length).toBeGreaterThan(0);
   });
 
   it("should deactivate cleanly", () => {
     expect(() => deactivate()).not.toThrow();
+  });
+
+  it("keeps credential setup available when secure storage cannot be read", async () => {
+    vi.mocked(context.secrets.get).mockRejectedValueOnce(new Error("storage locked"));
+    await activate(context);
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("could not load"));
+    expect(vi.mocked(vscode.commands.registerCommand).mock.calls.map(([name]) => name)).toContain("maip.configure");
   });
 });

@@ -52,9 +52,9 @@ const AGENT_TYPES = [
 function registerRegisterAgentCommand(client, refreshCallback) {
     return vscode.commands.registerCommand("maip.registerAgent", async () => {
         if (!(0, config_1.isConfigured)()) {
-            const action = await vscode.window.showErrorMessage("MAIP is not configured. Set your API key and Tenant ID in settings.", "Open Settings");
-            if (action === "Open Settings") {
-                await vscode.commands.executeCommand("workbench.action.openSettings", "maip");
+            const action = await vscode.window.showErrorMessage("MAIP is not configured. Run MAIP: Configure Credentials to connect securely.", "Configure Credentials");
+            if (action === "Configure Credentials") {
+                await vscode.commands.executeCommand("maip.configure");
             }
             return;
         }
@@ -85,7 +85,10 @@ function registerRegisterAgentCommand(client, refreshCallback) {
             placeHolder: "e.g., read, write, deploy",
         });
         const capabilities = capabilitiesInput && capabilitiesInput.trim().length > 0
-            ? capabilitiesInput.split(",").map((c) => c.trim()).filter((c) => c.length > 0)
+            ? capabilitiesInput
+                .split(",")
+                .map((c) => c.trim())
+                .filter((c) => c.length > 0)
             : undefined;
         try {
             await vscode.window.withProgress({
@@ -99,7 +102,7 @@ function registerRegisterAgentCommand(client, refreshCallback) {
                     capabilities,
                 });
                 const agentId = result.agent.agent_id;
-                const setAsDefault = await vscode.window.showInformationMessage(`Agent registered: ${result.agent.display_name} (trust: ${result.trust_score.toFixed(2)}). Agent ID: ${agentId}`, "Set as Workspace Agent", "Copy ID");
+                const setAsDefault = await vscode.window.showInformationMessage(`Agent registered: ${result.agent.display_name} (trust: ${result.trust_score?.toFixed(2) ?? "not provided"}). Agent ID: ${agentId}`, "Set as Workspace Agent", "Copy ID");
                 if (setAsDefault === "Set as Workspace Agent") {
                     await vscode.workspace
                         .getConfiguration("maip")

@@ -1,0 +1,12 @@
+node_modules/**
+src/**
+tests/**
+.git/**
+*.vsix
+*.log
+*.tsbuildinfo
+package-lock.json
+tsconfig.json
+vitest.config.ts
+dist/**/*.map
+dist/**/*.d.ts

@@ -10,12 +10,22 @@
 import * as vscode from "vscode";
 import { MAIPClient } from "./client";
 import { getConfig } from "./config";
+import { loadCredentials, credentialsChanged } from "./credentials";
 import { registerRegisterAgentCommand } from "./commands/register-agent";
+import {
+  registerRegisterCommand,
+  promptRegistrationIfNeeded,
+} from "./commands/register";
 import { registerCreateReceiptCommand } from "./commands/create-receipt";
 import { registerVerifyReceiptCommand } from "./commands/verify-receipt";
 import { registerShowTrustCommand } from "./commands/show-trust";
 import { registerListReceiptsCommand } from "./commands/list-receipts";
 import { registerExportAuditCommand } from "./commands/export-audit";
+import { registerSignOutCommand } from "./commands/signout";
+import {
+  registerConfigureCommand,
+  registerTestConnectionCommand,
+} from "./commands/configure";
 import { ReceiptTreeProvider } from "./providers/receipt-tree";
 import { AgentTreeProvider } from "./providers/agent-tree";
 import { TrustDecorationProvider } from "./providers/trust-decoration";
@@ -28,13 +38,27 @@ import { MAIPStatusBar } from "./status-bar";
 
 let client: MAIPClient;
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const reloadCredentials = async (): Promise<void> => {
+    try {
+      await loadCredentials(context.secrets);
+    } catch {
+      void vscode.window.showErrorMessage("MAIP could not load its saved connection. Run MAIP: Configure Credentials to reconnect.");
+    }
+  };
+  await reloadCredentials();
   client = new MAIPClient(getConfig());
 
   const receiptTree = new ReceiptTreeProvider(client);
   const agentTree = new AgentTreeProvider(client);
 
+  let statusBar: MAIPStatusBar | undefined;
+  let trustDecoration: TrustDecorationProvider | undefined;
+  let hoverProvider: MAIPHoverProvider | undefined;
   const refreshAll = (): void => {
+    statusBar?.refresh();
+    hoverProvider?.clearCache();
+    trustDecoration?.refresh();
     receiptTree.refresh();
     agentTree.refresh();
   };
@@ -46,11 +70,19 @@ export function activate(context: vscode.ExtensionContext): void {
         event.affectsConfiguration("maip.apiKey") ||
         event.affectsConfiguration("maip.tenantId")
       ) {
-        client = new MAIPClient(getConfig());
+        client.updateConfig(getConfig());
         refreshAll();
       }
     }),
   );
+
+  context.subscriptions.push(context.secrets.onDidChange(async (event) => {
+    if (credentialsChanged(event)) {
+      await reloadCredentials();
+      client.updateConfig(getConfig());
+      refreshAll();
+    }
+  }));
 
   // Tree views
   context.subscriptions.push(
@@ -60,12 +92,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Commands
   context.subscriptions.push(
+    registerRegisterCommand(context),
+    registerSignOutCommand(context),
     registerRegisterAgentCommand(client, refreshAll),
     registerCreateReceiptCommand(client, refreshAll),
     registerVerifyReceiptCommand(client, context.extensionUri),
     registerShowTrustCommand(client, context.extensionUri),
     registerListReceiptsCommand(client, context.extensionUri),
     registerExportAuditCommand(client),
+    registerConfigureCommand(client),
+    registerTestConnectionCommand(() => client),
   );
 
   // Refresh command
@@ -83,13 +119,16 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Providers
-  const trustDecoration = new TrustDecorationProvider(client);
+  trustDecoration = new TrustDecorationProvider(client);
   context.subscriptions.push(trustDecoration);
 
-  const hoverProvider = new MAIPHoverProvider(client);
+  hoverProvider = new MAIPHoverProvider(client);
   context.subscriptions.push(
     vscode.languages.registerHoverProvider({ scheme: "file" }, hoverProvider),
-    vscode.languages.registerHoverProvider({ scheme: "untitled" }, hoverProvider),
+    vscode.languages.registerHoverProvider(
+      { scheme: "untitled" },
+      hoverProvider,
+    ),
   );
 
   // Auto-receipt handlers
@@ -98,14 +137,17 @@ export function activate(context: vscode.ExtensionContext): void {
   const terminal = new TerminalAutoReceipt(client);
   context.subscriptions.push(gitHook, fileSave, terminal);
 
-  // Status bar
-  const statusBar = new MAIPStatusBar(client);
+  // Status bar — trust score + usage counter
+  statusBar = new MAIPStatusBar(client);
   context.subscriptions.push(statusBar);
 
   // Output channel for diagnostics
   const outputChannel = vscode.window.createOutputChannel("MAIP");
   context.subscriptions.push(outputChannel);
   outputChannel.appendLine("MAIP extension activated");
+
+  // Prompt registration if no API key stored
+  promptRegistrationIfNeeded(context);
 }
 
 export function deactivate(): void {

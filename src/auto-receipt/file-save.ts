@@ -10,13 +10,21 @@
 import * as vscode from "vscode";
 import * as crypto from "crypto";
 import type { MAIPClient } from "../client";
-import { isConfigured, getAgentId, isAutoReceiptOnSaveEnabled } from "../config";
+import {
+  isConfigured,
+  getAgentId,
+  getSigningAlgorithm,
+  isAutoReceiptOnSaveEnabled,
+} from "../config";
 
 const DEBOUNCE_MS = 2_000;
 
 export class FileSaveAutoReceipt implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly pendingSaves = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly pendingSaves = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   constructor(private readonly client: MAIPClient) {
     this.disposables.push(
@@ -74,7 +82,10 @@ export class FileSaveAutoReceipt implements vscode.Disposable {
     agentId: string,
   ): Promise<void> {
     const content = document.getText();
-    const contentHash = crypto.createHash("sha256").update(content, "utf8").digest("hex");
+    const contentHash = crypto
+      .createHash("sha256")
+      .update(content, "utf8")
+      .digest("hex");
     const languageId = document.languageId;
     const lineCount = document.lineCount;
     const fileName = document.fileName;
@@ -93,6 +104,7 @@ export class FileSaveAutoReceipt implements vscode.Disposable {
           line_count: lineCount,
           byte_size: Buffer.byteLength(content, "utf8"),
           workspace_folder: workspaceFolder?.uri.fsPath ?? null,
+          requested_algorithm: getSigningAlgorithm(),
           source: "vscode-auto-receipt",
           timestamp: new Date().toISOString(),
         },

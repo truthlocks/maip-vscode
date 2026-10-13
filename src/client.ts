@@ -24,8 +24,7 @@ import type {
   ListDelegationsParams,
   CreateDelegationRequest,
   VerifyDelegationChainResponse,
-  AuditReport,
-  ExportAuditReportParams,
+  AgentEvidenceSnapshot,
   PaginatedResponse,
 } from "./types";
 
@@ -58,11 +57,17 @@ export class MAIPNetworkError extends Error {
 }
 
 export class MAIPClient {
-  private readonly config: MAIPConfig;
-  private readonly maxRetries: number;
-  private readonly timeoutMs: number;
+  private config: MAIPConfig;
+  private maxRetries: number;
+  private timeoutMs: number;
 
   constructor(config: MAIPConfig) {
+    this.config = config;
+    this.maxRetries = config.maxRetries ?? 3;
+    this.timeoutMs = config.timeoutMs ?? 30_000;
+  }
+
+  updateConfig(config: MAIPConfig): void {
     this.config = config;
     this.maxRetries = config.maxRetries ?? 3;
     this.timeoutMs = config.timeoutMs ?? 30_000;
@@ -85,7 +90,7 @@ export class MAIPClient {
     return {
       agent,
       trust_score:
-        (agent as unknown as Record<string, number>).trust_score ?? 0.5,
+        (agent as unknown as Record<string, number>).trust_score,
     };
   }
 
@@ -143,7 +148,7 @@ export class MAIPClient {
   // ---------------------------------------------------------------------------
 
   async createReceipt(request: CreateReceiptRequest): Promise<Receipt> {
-    return this.request<Receipt>("POST", "/agent-receipts", request);
+    return this.request<Receipt>("POST", "/agent-receipts", { ...request, receipt_type: request.receipt_type ?? "action", metadata: request.payload });
   }
 
   async getReceipt(receiptId: string): Promise<Receipt> {
@@ -154,20 +159,15 @@ export class MAIPClient {
   }
 
   async verifyReceipt(receiptId: string): Promise<VerifyReceiptResponse> {
-    const receipt = await this.getReceipt(receiptId);
-    const valid = receipt.status === "valid";
+    const result = await this.request<{ valid: boolean; verdict: string; reason?: string; signature_verified: boolean; transparency_verified: boolean }>(
+      "GET", `/agent-receipts/verify/${encodeURIComponent(receiptId)}`,
+    );
+    const valid = result.valid === true && result.verdict === "VALID" && result.signature_verified === true;
     return {
       valid,
       verdict: valid ? "PASS" : "FAIL",
-      details: valid
-        ? "Receipt signature and chain verified successfully"
-        : `Receipt status is ${receipt.status}`,
-      warnings:
-        receipt.status === "expired"
-          ? ["Receipt has expired"]
-          : receipt.status === "superseded"
-            ? ["Receipt has been superseded by a newer receipt"]
-            : [],
+      details: result.reason || result.verdict,
+      warnings: result.transparency_verified ? [] : ["Transparency-log inclusion was not verified"],
     };
   }
 
@@ -199,8 +199,8 @@ export class MAIPClient {
     if (Array.isArray(raw)) {
       receipts = raw as Receipt[];
     } else {
-      receipts = ((raw as Record<string, unknown>).receipts ??
-        (raw as Record<string, unknown>).data ??
+      receipts = ((raw as Record<string, unknown> | null)?.receipts ??
+        (raw as Record<string, unknown> | null)?.data ??
         []) as Receipt[];
     }
     const rawObj = raw as Record<string, unknown> | null;
@@ -229,12 +229,18 @@ export class MAIPClient {
     agentId: string,
     limit?: number,
   ): Promise<readonly TrustHistoryEntry[]> {
-    return this.request<readonly TrustHistoryEntry[]>(
+    const result = await this.request<{ history: { score: number; created_at: string; trigger_type: string; triggered_by?: string }[] | null }>(
       "GET",
       `/agents/${encodeURIComponent(agentId)}/trust-history`,
       undefined,
       limit !== undefined ? { limit } : undefined,
     );
+    return (result.history ?? []).map((entry) => ({
+      trust_score: entry.score,
+      computed_at: entry.created_at,
+      event_type: entry.trigger_type,
+      event_detail: entry.triggered_by ?? "",
+    }));
   }
 
   // ---------------------------------------------------------------------------
@@ -260,22 +266,23 @@ export class MAIPClient {
   async listDelegations(
     params?: ListDelegationsParams,
   ): Promise<PaginatedResponse<Delegation>> {
-    const agentId = params?.parent_agent_id ?? params?.child_agent_id ?? "";
-    return this.request<PaginatedResponse<Delegation>>(
+    const agentId = params?.parent_agent_id ?? params?.child_agent_id;
+    if (!agentId) throw new Error("An agent ID is required to list delegations");
+    const raw = await this.request<Delegation[] | null>(
       "GET",
       `/agents/${encodeURIComponent(agentId)}/delegations`,
       undefined,
-      params as Record<string, string | number | boolean | undefined>,
     );
+    const rows = (raw ?? []).filter((d) => !params?.status || d.status === params.status);
+    const offset = params?.offset ?? 0;
+    const limit = params?.limit ?? rows.length;
+    return { data: rows.slice(offset, offset + limit), total: rows.length, limit, offset };
   }
 
   async verifyDelegationChain(
     agentId: string,
   ): Promise<VerifyDelegationChainResponse> {
-    return this.request<VerifyDelegationChainResponse>(
-      "GET",
-      `/agents/${encodeURIComponent(agentId)}/delegation-tree`,
-    );
+    throw new Error(`Cryptographic delegation-chain verification is not available for ${agentId}. A delegation listing is not proof of validity.`);
   }
 
   // ---------------------------------------------------------------------------
@@ -283,16 +290,24 @@ export class MAIPClient {
   // ---------------------------------------------------------------------------
 
   async exportAuditReport(
-    params: ExportAuditReportParams,
-  ): Promise<AuditReport> {
-    return this.request<AuditReport>("POST", "/compliance/reports", {
-      entity_id: "tenant",
-      entity_type: "tenant",
-      regulation: "SOC2",
-      period_start: params.from,
-      period_end: params.to,
-      generated_by: "maip-vscode",
-    });
+    agentId: string,
+  ): Promise<AgentEvidenceSnapshot> {
+    if (!agentId) throw new Error("Select an agent before exporting evidence");
+    const [agent, trust, delegations, receipts] = await Promise.all([
+      this.getAgent(agentId), this.getTrustScore(agentId),
+      this.listDelegations({ parent_agent_id: agentId }),
+      this.listReceipts({ agent_id: agentId, limit: 100 }),
+    ]);
+    return {
+      format: "truthlocks-agent-evidence-v1", generated_at: new Date().toISOString(),
+      agent, trust, delegations: delegations.data, receipts: receipts.data, receipt_limit: 100,
+      limitations: [
+        "Point-in-time agent evidence, not a SOC 2 audit report or ISO certification.",
+        "Includes at most the 100 most recent receipts; this is not a complete audit-log export.",
+        "Receipt signatures and delegation chains are not verified by this export. Use Verify Receipt to check an individual receipt.",
+        "Delegations include only records directly involving this agent, not its entire descendant tree.",
+      ],
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -311,30 +326,30 @@ export class MAIPClient {
       Accept: "application/json",
       "X-API-Key": this.config.apiKey,
     };
-    if (this.config.tenantId && !this.config.apiKey.startsWith("tl_live_")) {
-      headers["X-Tenant-ID"] = this.config.tenantId;
+    if (this.config.bearerToken) {
+      if (this.config.apiKey) throw new Error("Use one API key or bearer token, not both");
+      delete headers["X-API-Key"];
+      headers["Authorization"] = `Bearer ${this.config.bearerToken}`;
     }
-
+    const retries = method === "GET" || method === "HEAD" ? this.maxRetries : 0;
     let lastError: Error | undefined;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
       if (attempt > 0) {
         const delay = this.calculateDelay(attempt);
         await this.sleep(delay);
       }
 
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
         const response = await fetch(url, {
           method,
           headers,
           body: body !== undefined ? JSON.stringify(body) : undefined,
-          signal: controller.signal,
+          signal: AbortSignal.timeout(this.timeoutMs),
+          redirect: "error",
         });
 
-        clearTimeout(timeout);
 
         if (response.ok) {
           const text = await response.text();
@@ -346,13 +361,13 @@ export class MAIPClient {
 
         if (
           RETRYABLE_STATUS_CODES.has(response.status) &&
-          attempt < this.maxRetries
+          attempt < retries
         ) {
           const retryAfter = response.headers.get("Retry-After");
           if (retryAfter) {
             const retryDelaySeconds = parseInt(retryAfter, 10);
             if (!isNaN(retryDelaySeconds)) {
-              await this.sleep(retryDelaySeconds * 1000);
+              await this.sleep(Math.min(Math.max(retryDelaySeconds, 0) * 1000, MAX_DELAY_MS));
             }
           }
           lastError = new MAIPApiError(response.status, {
@@ -385,12 +400,12 @@ export class MAIPClient {
             `Request to ${method} ${path} timed out after ${this.timeoutMs}ms`,
             error,
           );
-          if (attempt < this.maxRetries) {
+          if (attempt < retries) {
             continue;
           }
         }
 
-        if (attempt < this.maxRetries) {
+        if (attempt < retries) {
           lastError = new MAIPNetworkError(
             `Network error on ${method} ${path}`,
             error,

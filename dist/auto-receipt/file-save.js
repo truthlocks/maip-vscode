@@ -92,7 +92,10 @@ class FileSaveAutoReceipt {
     }
     async createSaveReceipt(document, agentId) {
         const content = document.getText();
-        const contentHash = crypto.createHash("sha256").update(content, "utf8").digest("hex");
+        const contentHash = crypto
+            .createHash("sha256")
+            .update(content, "utf8")
+            .digest("hex");
         const languageId = document.languageId;
         const lineCount = document.lineCount;
         const fileName = document.fileName;
@@ -109,6 +112,7 @@ class FileSaveAutoReceipt {
                     line_count: lineCount,
                     byte_size: Buffer.byteLength(content, "utf8"),
                     workspace_folder: workspaceFolder?.uri.fsPath ?? null,
+                    requested_algorithm: (0, config_1.getSigningAlgorithm)(),
                     source: "vscode-auto-receipt",
                     timestamp: new Date().toISOString(),
                 },

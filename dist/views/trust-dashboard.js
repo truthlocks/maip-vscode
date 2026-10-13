@@ -193,13 +193,13 @@ class TrustDashboardPanel {
     <span class="meta-label">Trust Level</span>
     <span class="meta-value">${escapeHtml(trustScore.trust_level)}</span>
     <span class="meta-label">Trust Ceiling</span>
-    <span class="meta-value">${trustScore.trust_ceiling.toFixed(4)}</span>
+    <span class="meta-value">${trustScore.trust_ceiling?.toFixed(4) ?? "Not provided"}</span>
     <span class="meta-label">Delegation Depth</span>
-    <span class="meta-value">${trustScore.delegation_depth}</span>
+    <span class="meta-value">${trustScore.delegation_depth ?? "Not provided"}</span>
     <span class="meta-label">Computed At</span>
-    <span class="meta-value">${escapeHtml(trustScore.computed_at)}</span>
+    <span class="meta-value">${escapeHtml(trustScore.computed_at ?? "Not provided")}</span>
     <span class="meta-label">Valid Until</span>
-    <span class="meta-value">${escapeHtml(trustScore.valid_until)}</span>
+    <span class="meta-value">${escapeHtml(trustScore.valid_until ?? "Not provided")}</span>
   </div>
 
   <h2>Recent History</h2>
@@ -259,34 +259,25 @@ function renderHistoryChart(history) {
         .map((entry, i) => {
         const x = padding.left + (i / Math.max(sorted.length - 1, 1)) * chartW;
         const y = padding.top + (1 - entry.trust_score) * chartH;
-        const color = entry.trust_score >= 0.8 ? "#4ec94e" : entry.trust_score >= 0.5 ? "#e6b422" : "#c94e4e";
+        const color = entry.trust_score >= 0.8
+            ? "#4ec94e"
+            : entry.trust_score >= 0.5
+                ? "#e6b422"
+                : "#c94e4e";
         return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}"/>`;
     })
         .join("\n    ")}
   </svg>`;
 }
 function renderComponents(trustScore) {
-    const components = [
-        { label: "Reputation", value: trustScore.score_components.reputation },
-        { label: "Key Health", value: trustScore.score_components.key_health },
-        { label: "Delegation Depth", value: trustScore.score_components.delegation_depth },
-        { label: "Verification History", value: trustScore.score_components.verification_history },
-        { label: "Multi-Witness", value: trustScore.score_components.multi_witness },
-        { label: "Anomaly Penalty", value: trustScore.score_components.anomaly_penalty },
-    ];
-    return components
-        .map((c) => {
-        const pct = Math.max(0, Math.min(1, c.value)) * 100;
-        const color = c.label === "Anomaly Penalty"
-            ? (c.value > 0 ? "#c94e4e" : "#4ec94e")
-            : (c.value >= 0.7 ? "#4ec94e" : c.value >= 0.4 ? "#e6b422" : "#c94e4e");
-        return `<div class="component-grid">
-        <span class="component-label">${escapeHtml(c.label)}</span>
-        <span class="component-value">${c.value.toFixed(3)}</span>
-        <div class="component-bar"><div class="component-bar-fill" style="width:${pct}%;background:${color};"></div></div>
-      </div>`;
-    })
-        .join("");
+    const factors = trustScore.factors ?? trustScore.score_components ?? {};
+    const components = Object.entries(factors);
+    if (!components.length)
+        return "<p>No score factors were provided by the service.</p>";
+    return components.map(([label, value]) => `<div class="component-grid">
+    <span class="component-label">${escapeHtml(label.replace(/_/g, " "))}</span>
+    <span class="component-value">${escapeHtml(typeof value === "number" ? value.toFixed(3) : JSON.stringify(value))}</span>
+  </div>`).join("");
 }
 function renderHistoryTable(history) {
     if (history.length === 0) {
@@ -321,7 +312,9 @@ function formatDate(iso) {
     }
 }
 function escapeHtml(text) {
-    return text
+    if (text === null || text === undefined)
+        return "";
+    return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")

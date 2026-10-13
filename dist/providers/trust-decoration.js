@@ -44,7 +44,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TrustDecorationProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const config_1 = require("../config");
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const UUID_REGEX = /maip:[a-z0-9]{8}:[a-z0-9]{26}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const TRUST_HIGH_DECORATION = vscode.window.createTextEditorDecorationType({
     after: {
         contentText: " [trusted]",
@@ -99,6 +99,12 @@ class TrustDecorationProvider {
             this.triggerUpdateDecorations(editor);
         }
     }
+    refresh() {
+        this.scoreCache.clear();
+        const editor = vscode.window.activeTextEditor;
+        if (editor)
+            this.triggerUpdateDecorations(editor);
+    }
     triggerUpdateDecorations(editor) {
         if (this.decorationTimeout) {
             clearTimeout(this.decorationTimeout);
@@ -122,7 +128,9 @@ class TrustDecorationProvider {
         let match;
         UUID_REGEX.lastIndex = 0;
         while ((match = UUID_REGEX.exec(text)) !== null) {
-            const uuid = match[0].toLowerCase();
+            const uuid = match[0];
+            if (!seenUuids.has(uuid) && seenUuids.size >= 100)
+                continue;
             if (!seenUuids.has(uuid)) {
                 seenUuids.add(uuid);
             }

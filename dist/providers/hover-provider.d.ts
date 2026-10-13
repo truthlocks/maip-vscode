@@ -11,6 +11,7 @@ export declare class MAIPHoverProvider implements vscode.HoverProvider {
     private readonly client;
     private readonly hoverCache;
     constructor(client: MAIPClient);
+    clearCache(): void;
     provideHover(document: vscode.TextDocument, position: vscode.Position, _token: vscode.CancellationToken): Promise<vscode.Hover | undefined>;
 }
 //# sourceMappingURL=hover-provider.d.ts.map

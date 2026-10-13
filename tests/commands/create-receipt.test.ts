@@ -30,7 +30,7 @@ vi.mock("vscode", () => {
       getConfiguration: vi.fn(() => ({
         get: vi.fn((key: string, defaultValue: unknown) => {
           const vals: Record<string, unknown> = {
-            apiUrl: "https://api.test.com/v1/machine-identity",
+            apiUrl: "https://api.test.com/v1",
             apiKey: "test-key",
             tenantId: "test-tenant",
             agentId: "test-agent-id",
@@ -59,6 +59,7 @@ vi.mock("crypto", () => ({
 
 import * as vscode from "vscode";
 import { registerCreateReceiptCommand } from "../../src/commands/create-receipt";
+import { loadCredentials } from "../../src/credentials";
 import type { MAIPClient } from "../../src/client";
 
 function createMockClient(): MAIPClient {
@@ -79,14 +80,17 @@ describe("maip.createReceipt command", () => {
   let refreshCallback: ReturnType<typeof vi.fn>;
   let handler: Function;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    await loadCredentials({get: async () => JSON.stringify({apiUrl:"https://api.test.com/v1",apiKey:"tl_test_fixture"})} as any);
     mockClient = createMockClient();
     refreshCallback = vi.fn();
     registerCreateReceiptCommand(mockClient, refreshCallback);
 
     const calls = vi.mocked(vscode.commands.registerCommand).mock.calls;
-    const createReceiptCall = calls.find(([cmd]) => cmd === "maip.createReceipt");
+    const createReceiptCall = calls.find(
+      ([cmd]) => cmd === "maip.createReceipt",
+    );
     expect(createReceiptCall).toBeDefined();
     handler = createReceiptCall![1]!;
   });
@@ -104,7 +108,9 @@ describe("maip.createReceipt command", () => {
       label: "Action",
       value: "action",
     } as any);
-    vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(
+      undefined,
+    );
 
     await handler();
 
@@ -128,7 +134,9 @@ describe("maip.createReceipt command", () => {
       label: "Audit",
       value: "audit",
     } as any);
-    vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(
+      undefined,
+    );
 
     await handler();
 
@@ -182,6 +190,8 @@ describe("maip.createReceipt command", () => {
 
     await handler();
 
-    expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith("receipt-uuid-1234");
+    expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+      "receipt-uuid-1234",
+    );
   });
 });

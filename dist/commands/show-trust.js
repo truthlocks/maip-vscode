@@ -44,13 +44,12 @@ exports.registerShowTrustCommand = registerShowTrustCommand;
 const vscode = __importStar(require("vscode"));
 const config_1 = require("../config");
 const trust_dashboard_1 = require("../views/trust-dashboard");
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function registerShowTrustCommand(client, extensionUri) {
     return vscode.commands.registerCommand("maip.showTrustScore", async (agentIdArg) => {
         if (!(0, config_1.isConfigured)()) {
-            const action = await vscode.window.showErrorMessage("MAIP is not configured. Set your API key and Tenant ID in settings.", "Open Settings");
-            if (action === "Open Settings") {
-                await vscode.commands.executeCommand("workbench.action.openSettings", "maip");
+            const action = await vscode.window.showErrorMessage("MAIP is not configured. Run MAIP: Configure Credentials to connect securely.", "Configure Credentials");
+            if (action === "Configure Credentials") {
+                await vscode.commands.executeCommand("maip.configure");
             }
             return;
         }
@@ -59,13 +58,10 @@ function registerShowTrustCommand(client, extensionUri) {
             agentId = await vscode.window.showInputBox({
                 title: "Agent ID",
                 prompt: "Enter the agent ID to view trust score",
-                placeHolder: "e.g., a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                placeHolder: "e.g., maip:t1234567:01HYX3KPZQ...",
                 validateInput: (value) => {
                     if (!value || value.trim().length === 0) {
                         return "Agent ID is required";
-                    }
-                    if (!UUID_PATTERN.test(value.trim())) {
-                        return "Agent ID must be a valid UUID";
                     }
                     return undefined;
                 },

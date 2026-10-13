@@ -14,7 +14,7 @@ export type AgentType = "service" | "pipeline" | "model" | "tool";
 
 export type AgentStatus = "active" | "suspended" | "revoked";
 
-export type TrustLevel = "system" | "delegated" | "ephemeral";
+export type TrustLevel = "platform_root" | "verified_org" | "verified_individual" | "authenticated" | "self_asserted" | "anonymous";
 
 export interface AgentIdentity {
   readonly id: string;
@@ -26,8 +26,10 @@ export interface AgentIdentity {
   readonly genesis_attestation_id: string;
   readonly genesis_public_key: string;
   readonly status: AgentStatus;
-  readonly capabilities: readonly string[];
-  readonly max_delegation_depth: number;
+  readonly scopes?: readonly string[];
+  readonly capabilities?: readonly string[];
+  readonly delegation_depth?: number;
+  readonly max_delegation_depth?: number;
   readonly metadata?: Record<string, unknown>;
   readonly created_at: string;
   readonly updated_at: string;
@@ -43,7 +45,7 @@ export interface RegisterAgentRequest {
 
 export interface RegisterAgentResponse {
   readonly agent: AgentIdentity;
-  readonly trust_score: number;
+  readonly trust_score?: number;
 }
 
 export interface ListAgentsParams {
@@ -78,11 +80,14 @@ export type ReceiptStatus =
   | "superseded";
 
 export interface Receipt {
+  readonly metadata?: Record<string, unknown>;
+  readonly signing_envelope?: { algorithm?: string; key_id?: string; version?: string };
   readonly id: string;
   readonly receipt_id: string;
   readonly tenant_id: string;
   readonly agent_id: string;
   readonly action: string;
+  readonly purpose?: string;
   readonly receipt_type: ReceiptType;
   readonly payload: Record<string, unknown>;
   readonly inputs_hash: string;
@@ -138,19 +143,31 @@ export interface TrustScore {
   readonly agent_id: string;
   readonly trust_level: string;
   readonly trust_score: number;
-  readonly score_components: TrustScoreComponents;
-  readonly trust_ceiling: number;
-  readonly delegation_depth: number;
-  readonly computed_at: string;
-  readonly valid_until: string;
+  readonly factors?: Record<string, unknown> | null;
+  readonly score_components?: TrustScoreComponents;
+  readonly trust_ceiling?: number;
+  readonly delegation_depth?: number;
+  readonly computed_at?: string;
+  readonly valid_until?: string;
 }
 
 export interface TrustHistoryEntry {
   readonly trust_score: number;
-  readonly score_components: TrustScoreComponents;
+  readonly score_components?: TrustScoreComponents;
   readonly computed_at: string;
   readonly event_type: string;
   readonly event_detail: string;
+}
+
+export interface AgentEvidenceSnapshot {
+  readonly format: "truthlocks-agent-evidence-v1";
+  readonly generated_at: string;
+  readonly agent: AgentIdentity;
+  readonly trust: TrustScore;
+  readonly delegations: readonly Delegation[];
+  readonly receipts: readonly Receipt[];
+  readonly receipt_limit: number;
+  readonly limitations: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +259,7 @@ export interface ExportAuditReportParams {
 // ---------------------------------------------------------------------------
 
 export interface MAIPConfig {
+  readonly bearerToken?: string;
   readonly apiUrl: string;
   readonly apiKey: string;
   readonly tenantId: string;
@@ -278,7 +296,7 @@ export interface AgentGroupByStatus {
 
 export interface AgentWithTrust {
   readonly agent: AgentIdentity;
-  readonly trustScore: number;
+  readonly trustScore: number | null;
 }
 
 export interface AutoReceiptMetadata {

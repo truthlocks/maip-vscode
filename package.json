@@ -1,8 +1,8 @@
 {
   "name": "maip-vscode",
   "displayName": "MAIP - Machine Identity & Integrity",
-  "description": "Machine-Actionable Integrity Protocol for VS Code — receipts, trust scores, and agent management",
-  "version": "1.0.2",
+  "description": "Truthlocks machine identities, signed receipts and signature verification in VS Code",
+  "version": "1.4.4",
   "publisher": "truthlocks",
   "license": "Apache-2.0",
   "icon": "icon.png",
@@ -23,6 +23,11 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "maip.register",
+        "title": "MAIP: Register Developer",
+        "icon": "$(account)"
+      },
       {
         "command": "maip.registerAgent",
         "title": "MAIP: Register Agent",
@@ -50,13 +55,28 @@
       },
       {
         "command": "maip.exportAudit",
-        "title": "MAIP: Export Audit Report",
+        "title": "MAIP: Export Agent Evidence",
         "icon": "$(export)"
       },
       {
         "command": "maip.refreshReceipts",
         "title": "MAIP: Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "maip.configure",
+        "title": "MAIP: Configure Credentials",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "maip.testConnection",
+        "title": "MAIP: Test Connection",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "maip.signOut",
+        "title": "MAIP: Sign Out",
+        "icon": "$(sign-out)"
       }
     ],
     "viewsContainers": {
@@ -89,13 +109,14 @@
       "properties": {
         "maip.apiUrl": {
           "type": "string",
-          "default": "https://api.truthlocks.com/v1/machine-identity",
-          "description": "MAIP API URL"
+          "default": "https://sandbox-api.truthlocks.com/v1",
+          "description": "MAIP API base URL (e.g., https://api.truthlocks.com/v1)"
         },
         "maip.apiKey": {
           "type": "string",
           "default": "",
-          "description": "MAIP API Key"
+          "description": "MAIP API Key",
+          "deprecationMessage": "Run MAIP: Configure Credentials. API keys are now read only from encrypted SecretStorage, not settings."
         },
         "maip.tenantId": {
           "type": "string",
@@ -107,6 +128,23 @@
           "default": "",
           "description": "Agent ID for this workspace"
         },
+        "maip.signingAlgorithm": {
+          "type": "string",
+          "default": "Ed25519",
+          "enum": [
+            "ES256",
+            "ES384",
+            "ES512",
+            "RS256",
+            "RS384",
+            "RS512",
+            "PS256",
+            "PS384",
+            "PS512",
+            "Ed25519"
+          ],
+          "description": "Legacy preference recorded as requested_algorithm metadata. MAIP signs with the registered agent key; this setting does not select or change that key."
+        },
         "maip.autoReceiptOnSave": {
           "type": "boolean",
           "default": false,
@@ -114,7 +152,7 @@
         },
         "maip.autoReceiptOnCommit": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Auto-generate receipt on git commit"
         },
         "maip.showTrustBadges": {
@@ -144,13 +182,22 @@
     "watch": "tsc -watch -p tsconfig.json",
     "package": "vsce package",
     "test": "vitest run",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "vscode:prepublish": "npm run build"
   },
   "dependencies": {},
   "devDependencies": {
     "@types/vscode": "^1.85.0",
     "typescript": "^5.4",
     "vitest": "^1.0",
-    "@vscode/vsce": "^2.0"
+    "@vscode/vsce": "^2.0",
+    "@types/node": "^20.0.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "MAIP can submit workspace receipt metadata. Trust the workspace before enabling the extension."
+    },
+    "virtualWorkspaces": false
   }
 }

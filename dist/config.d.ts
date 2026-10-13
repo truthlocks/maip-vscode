@@ -7,6 +7,8 @@
 import type { MAIPConfig } from "./types";
 export declare function getConfig(): MAIPConfig;
 export declare function getAgentId(): string;
+export type SigningAlgorithm = "ES256" | "ES384" | "ES512" | "RS256" | "RS384" | "RS512" | "PS256" | "PS384" | "PS512" | "Ed25519";
+export declare function getSigningAlgorithm(): SigningAlgorithm;
 export declare function isAutoReceiptOnSaveEnabled(): boolean;
 export declare function isAutoReceiptOnCommitEnabled(): boolean;
 export declare function isShowTrustBadgesEnabled(): boolean;

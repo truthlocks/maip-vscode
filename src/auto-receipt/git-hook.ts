@@ -10,7 +10,12 @@
 import * as vscode from "vscode";
 import * as crypto from "crypto";
 import type { MAIPClient } from "../client";
-import { isConfigured, getAgentId, isAutoReceiptOnCommitEnabled } from "../config";
+import {
+  isConfigured,
+  getAgentId,
+  getSigningAlgorithm,
+  isAutoReceiptOnCommitEnabled,
+} from "../config";
 
 interface GitExtension {
   readonly getAPI: (version: number) => GitAPI;
@@ -28,7 +33,9 @@ interface GitRepository {
 }
 
 interface GitRepositoryState {
-  readonly HEAD: { readonly commit?: string; readonly name?: string } | undefined;
+  readonly HEAD:
+    | { readonly commit?: string; readonly name?: string }
+    | undefined;
   readonly workingTreeChanges: readonly GitChange[];
   readonly indexChanges: readonly GitChange[];
 }
@@ -47,7 +54,8 @@ export class GitHookAutoReceipt implements vscode.Disposable {
   }
 
   private initializeGitWatcher(): void {
-    const gitExtension = vscode.extensions.getExtension<GitExtension>("vscode.git");
+    const gitExtension =
+      vscode.extensions.getExtension<GitExtension>("vscode.git");
     if (!gitExtension) {
       return;
     }
@@ -108,7 +116,10 @@ export class GitHookAutoReceipt implements vscode.Disposable {
     const branchName = repo.state.HEAD?.name ?? "unknown";
     const workspaceFolder = repo.rootUri.fsPath;
 
-    const commitHash = crypto.createHash("sha256").update(currentCommit, "utf8").digest("hex");
+    const commitHash = crypto
+      .createHash("sha256")
+      .update(currentCommit, "utf8")
+      .digest("hex");
 
     try {
       const receipt = await this.client.createReceipt({
@@ -121,17 +132,20 @@ export class GitHookAutoReceipt implements vscode.Disposable {
           branch: branchName,
           previous_commit: previousCommit ?? null,
           workspace_folder: workspaceFolder,
+          requested_algorithm: getSigningAlgorithm(),
           source: "vscode-auto-receipt",
           timestamp: new Date().toISOString(),
         },
       });
 
       vscode.window.showInformationMessage(
-        `MAIP: Receipt created for commit ${currentCommit.substring(0, 8)} (${receipt.id.substring(0, 8)})`,
+        `MAIP: Receipt created for commit ${currentCommit.substring(0, 8)} (${(receipt.receipt_id || receipt.id).substring(0, 20)})`,
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      vscode.window.showWarningMessage(`MAIP: Failed to create auto-receipt for commit: ${message}`);
+      vscode.window.showWarningMessage(
+        `MAIP: Failed to create auto-receipt for commit: ${message}`,
+      );
     }
   }
 

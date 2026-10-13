@@ -21,7 +21,7 @@ import type { MAIPConfig } from "../src/types";
 
 function createConfig(overrides?: Partial<MAIPConfig>): MAIPConfig {
   return {
-    apiUrl: "https://api.test.com/v1/machine-identity",
+    apiUrl: "https://api.test.com/v1",
     apiKey: "test-key",
     tenantId: "test-tenant",
     timeoutMs: 5_000,
@@ -40,7 +40,8 @@ function makeResponse(
     ok: status >= 200 && status < 300,
     status,
     headers: headersObj,
-    text: () => Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
+    text: () =>
+      Promise.resolve(typeof body === "string" ? body : JSON.stringify(body)),
   } as Response;
 }
 
@@ -62,17 +63,18 @@ describe("MAIPClient", () => {
       const config = createConfig();
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValueOnce(makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }));
+      fetchMock.mockResolvedValueOnce(
+        makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }),
+      );
 
       await client.listAgents();
 
       expect(fetchMock).toHaveBeenCalledWith(
-        "https://api.test.com/v1/machine-identity/agents",
+        "https://api.test.com/v1/agents",
         expect.objectContaining({
           method: "GET",
           headers: expect.objectContaining({
             "X-API-Key": "test-key",
-            "X-Tenant-ID": "test-tenant",
             "Content-Type": "application/json",
             Accept: "application/json",
           }),
@@ -85,12 +87,10 @@ describe("MAIPClient", () => {
       const client = new MAIPClient(config);
 
       const responseAgent = {
-        agent: {
-          id: "1",
-          agent_id: "agent-1",
-          display_name: "Test Agent",
-          status: "active",
-        },
+        id: "1",
+        agent_id: "agent-1",
+        display_name: "Test Agent",
+        status: "active",
         trust_score: 0.95,
       };
 
@@ -106,13 +106,14 @@ describe("MAIPClient", () => {
       expect(result.trust_score).toBe(0.95);
 
       expect(fetchMock).toHaveBeenCalledWith(
-        "https://api.test.com/v1/machine-identity/agents",
+        "https://api.test.com/v1/agents",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
-            name: "Test Agent",
-            type: "service",
-            capabilities: ["read"],
+            display_name: "Test Agent",
+            agent_type: "service",
+            scopes: ["read"],
+            metadata: undefined,
           }),
         }),
       );
@@ -122,7 +123,9 @@ describe("MAIPClient", () => {
       const config = createConfig();
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValueOnce(makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }));
+      fetchMock.mockResolvedValueOnce(
+        makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }),
+      );
 
       await client.listAgents({ status: "active", limit: 50 });
 
@@ -137,10 +140,12 @@ describe("MAIPClient", () => {
       const config = createConfig();
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValue(makeResponse(400, {
-        code: "BAD_REQUEST",
-        message: "Invalid input",
-      }));
+      fetchMock.mockResolvedValue(
+        makeResponse(400, {
+          code: "BAD_REQUEST",
+          message: "Invalid input",
+        }),
+      );
 
       await expect(client.listAgents()).rejects.toThrow(MAIPApiError);
     });
@@ -149,11 +154,13 @@ describe("MAIPClient", () => {
       const config = createConfig();
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValue(makeResponse(404, {
-        code: "NOT_FOUND",
-        message: "Agent not found",
-        details: { agent_id: "missing" },
-      }));
+      fetchMock.mockResolvedValue(
+        makeResponse(404, {
+          code: "NOT_FOUND",
+          message: "Agent not found",
+          details: { agent_id: "missing" },
+        }),
+      );
 
       try {
         await client.getAgent("missing");
@@ -175,8 +182,15 @@ describe("MAIPClient", () => {
       const client = new MAIPClient(config);
 
       fetchMock
-        .mockResolvedValueOnce(makeResponse(429, { code: "RATE_LIMITED", message: "Too many requests" }))
-        .mockResolvedValueOnce(makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }));
+        .mockResolvedValueOnce(
+          makeResponse(429, {
+            code: "RATE_LIMITED",
+            message: "Too many requests",
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }),
+        );
 
       const result = await client.listAgents();
 
@@ -189,8 +203,15 @@ describe("MAIPClient", () => {
       const client = new MAIPClient(config);
 
       fetchMock
-        .mockResolvedValueOnce(makeResponse(503, { code: "UNAVAILABLE", message: "Service unavailable" }))
-        .mockResolvedValueOnce(makeResponse(200, { agent_id: "a1", trust_score: 0.9 }));
+        .mockResolvedValueOnce(
+          makeResponse(503, {
+            code: "UNAVAILABLE",
+            message: "Service unavailable",
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeResponse(200, { agent_id: "a1", trust_score: 0.9 }),
+        );
 
       const result = await client.getTrustScore("a1");
 
@@ -202,7 +223,9 @@ describe("MAIPClient", () => {
       const config = createConfig({ maxRetries: 1 });
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValue(makeResponse(502, { code: "BAD_GATEWAY", message: "Bad gateway" }));
+      fetchMock.mockResolvedValue(
+        makeResponse(502, { code: "BAD_GATEWAY", message: "Bad gateway" }),
+      );
 
       await expect(client.listAgents()).rejects.toThrow(MAIPApiError);
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -213,8 +236,16 @@ describe("MAIPClient", () => {
       const client = new MAIPClient(config);
 
       fetchMock
-        .mockResolvedValueOnce(makeResponse(429, { code: "RATE_LIMITED", message: "Wait" }, { "Retry-After": "1" }))
-        .mockResolvedValueOnce(makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }));
+        .mockResolvedValueOnce(
+          makeResponse(
+            429,
+            { code: "RATE_LIMITED", message: "Wait" },
+            { "Retry-After": "1" },
+          ),
+        )
+        .mockResolvedValueOnce(
+          makeResponse(200, { data: [], total: 0, limit: 10, offset: 0 }),
+        );
 
       const start = Date.now();
       await client.listAgents();
@@ -229,58 +260,44 @@ describe("MAIPClient", () => {
       const config = createConfig();
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValueOnce(makeResponse(200, {
-        valid: true,
-        verdict: "OK",
-        details: "All checks passed",
-        warnings: [],
-      }));
+      fetchMock.mockResolvedValueOnce(
+        makeResponse(200, {
+          receipt_id: "receipt-123",
+          status: "valid", valid: true, verdict: "VALID", signature_verified: true, transparency_verified: false,
+          action: "test.action",
+        }),
+      );
 
       const result = await client.verifyReceipt("receipt-123");
 
       expect(result.valid).toBe(true);
-      expect(result.verdict).toBe("OK");
+      expect(result.verdict).toBe("PASS");
 
       const calledUrl = fetchMock.mock.calls[0]![0] as string;
-      expect(calledUrl).toContain("/receipts/receipt-123/verify");
+      expect(calledUrl).toContain("/agent-receipts/verify/receipt-123");
     });
 
     it("should call correct endpoint for getTrustHistory", async () => {
       const config = createConfig();
       const client = new MAIPClient(config);
 
-      fetchMock.mockResolvedValueOnce(makeResponse(200, [{ trust_score: 0.9, computed_at: "2026-01-01" }]));
+      fetchMock.mockResolvedValueOnce(
+        makeResponse(200, { history: [{ score: 0.9, created_at: "2026-01-01", trigger_type: "registration" }], total: 1 }),
+      );
 
       const result = await client.getTrustHistory("agent-1", 10);
 
       expect(result).toHaveLength(1);
 
       const calledUrl = fetchMock.mock.calls[0]![0] as string;
-      expect(calledUrl).toContain("/trust/agent-1/history");
+      expect(calledUrl).toContain("/agents/agent-1/trust-history");
       expect(calledUrl).toContain("limit=10");
     });
 
-    it("should call correct endpoint for exportAuditReport", async () => {
-      const config = createConfig();
-      const client = new MAIPClient(config);
-
-      fetchMock.mockResolvedValueOnce(makeResponse(200, {
-        report_id: "rpt-1",
-        total_agents: 5,
-        total_receipts: 100,
-        anomalies: [],
-      }));
-
-      const result = await client.exportAuditReport({
-        from: "2026-01-01T00:00:00Z",
-        to: "2026-12-31T23:59:59Z",
-        include_anomalies: true,
-      });
-
-      expect(result.report_id).toBe("rpt-1");
-
-      const calledUrl = fetchMock.mock.calls[0]![0] as string;
-      expect(calledUrl).toContain("/audit/report");
+    it("does not produce a partial evidence export after an authorization failure", async () => {
+      fetchMock.mockResolvedValue(makeResponse(403, { code: "FORBIDDEN", message: "Agent access denied" }));
+      await expect(new MAIPClient(createConfig()).exportAuditReport("agent-1")).rejects.toThrow("Agent access denied");
+      expect(fetchMock.mock.calls.every(([, request]) => request.method === "GET")).toBe(true);
     });
   });
 });

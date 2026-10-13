@@ -41,17 +41,28 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getConfig = getConfig;
 exports.getAgentId = getAgentId;
+exports.getSigningAlgorithm = getSigningAlgorithm;
 exports.isAutoReceiptOnSaveEnabled = isAutoReceiptOnSaveEnabled;
 exports.isAutoReceiptOnCommitEnabled = isAutoReceiptOnCommitEnabled;
 exports.isShowTrustBadgesEnabled = isShowTrustBadgesEnabled;
 exports.isConfigured = isConfigured;
 const vscode = __importStar(require("vscode"));
+const credentials_1 = require("./credentials");
 const SECTION = "maip";
 function getConfig() {
     const cfg = vscode.workspace.getConfiguration(SECTION);
+    let connection = { apiKey: "", apiUrl: "https://sandbox-api.truthlocks.com/v1" };
+    try {
+        connection = (0, credentials_1.storedConnection)(cfg.get("apiUrl", connection.apiUrl));
+    }
+    catch {
+        // Keep setup commands available after an invalid legacy/workspace setting.
+        // Never attach a saved key to the fallback endpoint.
+    }
+    const { apiKey, apiUrl } = connection;
     return {
-        apiUrl: cfg.get("apiUrl", "https://api.truthlocks.com/v1/machine-identity").replace(/\/+$/, ""),
-        apiKey: cfg.get("apiKey", ""),
+        apiUrl,
+        apiKey,
         tenantId: cfg.get("tenantId", ""),
         timeoutMs: 30_000,
         maxRetries: 3,
@@ -60,17 +71,34 @@ function getConfig() {
 function getAgentId() {
     return vscode.workspace.getConfiguration(SECTION).get("agentId", "");
 }
+function getSigningAlgorithm() {
+    return vscode.workspace
+        .getConfiguration(SECTION)
+        .get("signingAlgorithm", "Ed25519");
+}
 function isAutoReceiptOnSaveEnabled() {
-    return vscode.workspace.getConfiguration(SECTION).get("autoReceiptOnSave", false);
+    return vscode.workspace
+        .getConfiguration(SECTION)
+        .get("autoReceiptOnSave", false);
 }
 function isAutoReceiptOnCommitEnabled() {
-    return vscode.workspace.getConfiguration(SECTION).get("autoReceiptOnCommit", true);
+    return vscode.workspace
+        .getConfiguration(SECTION)
+        .get("autoReceiptOnCommit", false);
 }
 function isShowTrustBadgesEnabled() {
-    return vscode.workspace.getConfiguration(SECTION).get("showTrustBadges", true);
+    return vscode.workspace
+        .getConfiguration(SECTION)
+        .get("showTrustBadges", true);
 }
 function isConfigured() {
     const cfg = getConfig();
-    return cfg.apiKey.length > 0 && cfg.tenantId.length > 0;
+    if (cfg.apiKey.length === 0) {
+        return false;
+    }
+    if (cfg.apiKey.startsWith("tl_live_") || cfg.apiKey.startsWith("tl_test_")) {
+        return true;
+    }
+    return cfg.tenantId.length > 0;
 }
 //# sourceMappingURL=config.js.map

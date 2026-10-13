@@ -11,7 +11,8 @@ import * as vscode from "vscode";
 import type { MAIPClient } from "../client";
 import { isConfigured, isShowTrustBadgesEnabled } from "../config";
 
-const UUID_REGEX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const UUID_REGEX =
+  /maip:[a-z0-9]{8}:[a-z0-9]{26}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 const TRUST_HIGH_DECORATION = vscode.window.createTextEditorDecorationType({
   after: {
@@ -81,6 +82,12 @@ export class TrustDecorationProvider implements vscode.Disposable {
     }
   }
 
+  refresh(): void {
+    this.scoreCache.clear();
+    const editor = vscode.window.activeTextEditor;
+    if (editor) this.triggerUpdateDecorations(editor);
+  }
+
   private triggerUpdateDecorations(editor: vscode.TextEditor): void {
     if (this.decorationTimeout) {
       clearTimeout(this.decorationTimeout);
@@ -108,7 +115,8 @@ export class TrustDecorationProvider implements vscode.Disposable {
     UUID_REGEX.lastIndex = 0;
 
     while ((match = UUID_REGEX.exec(text)) !== null) {
-      const uuid = match[0].toLowerCase();
+      const uuid = match[0];
+      if (!seenUuids.has(uuid) && seenUuids.size >= 100) continue;
       if (!seenUuids.has(uuid)) {
         seenUuids.add(uuid);
       }

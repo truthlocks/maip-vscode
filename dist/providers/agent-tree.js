@@ -83,14 +83,14 @@ class AgentTreeProvider {
         }
         const { agent, trustScore } = element.data;
         const item = new vscode.TreeItem(agent.display_name, vscode.TreeItemCollapsibleState.None);
-        item.description = `${agent.agent_id.substring(0, 8)} | Trust: ${trustScore.toFixed(2)}`;
+        item.description = `${agent.agent_id.substring(0, 8)} | Trust: ${trustScore?.toFixed(2) ?? "Unavailable"}`;
         item.tooltip = new vscode.MarkdownString(`**${agent.display_name}**\n\n` +
             `- **ID:** \`${agent.agent_id}\`\n` +
             `- **Type:** ${agent.trust_level}\n` +
             `- **Status:** ${agent.status}\n` +
-            `- **Trust Score:** ${trustScore.toFixed(4)}\n` +
-            `- **Capabilities:** ${agent.capabilities.length > 0 ? agent.capabilities.join(", ") : "none"}\n` +
-            `- **Delegation Depth:** ${agent.max_delegation_depth}\n` +
+            `- **Trust Score:** ${trustScore?.toFixed(4) ?? "Unavailable"}\n` +
+            `- **Capabilities:** ${(agent.scopes ?? agent.capabilities ?? []).join(", ") || "none"}\n` +
+            `- **Delegation Depth:** ${agent.delegation_depth ?? agent.max_delegation_depth ?? "Not provided"}\n` +
             `- **Created:** ${agent.created_at}\n`);
         item.iconPath = trustScoreIcon(trustScore);
         item.contextValue = agent.status === "active" ? "agentActive" : "agent";
@@ -127,9 +127,7 @@ class AgentTreeProvider {
                 list.push(agent);
             }
         }
-        return STATUS_ORDER
-            .map((status) => new AgentStatusGroup(status, grouped.get(status) ?? []))
-            .filter((g) => g.agents.length > 0);
+        return STATUS_ORDER.map((status) => new AgentStatusGroup(status, grouped.get(status) ?? [])).filter((g) => g.agents.length > 0);
     }
     async loadAgents() {
         this.isLoading = true;
@@ -142,7 +140,7 @@ class AgentTreeProvider {
                     return { agent, trustScore: trust.trust_score };
                 }
                 catch {
-                    return { agent, trustScore: 0 };
+                    return { agent, trustScore: null };
                 }
             });
             const settled = await Promise.allSettled(trustPromises);
@@ -176,6 +174,8 @@ function statusGroupIcon(status) {
     }
 }
 function trustScoreIcon(score) {
+    if (score === null)
+        return new vscode.ThemeIcon("question");
     if (score >= 0.8) {
         return new vscode.ThemeIcon("verified-filled", new vscode.ThemeColor("testing.iconPassed"));
     }

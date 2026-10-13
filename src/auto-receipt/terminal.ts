@@ -60,7 +60,9 @@ export class TerminalAutoReceipt implements vscode.Disposable {
       return;
     }
 
-    const matchedPattern = CI_CD_PATTERNS.find((p) => p.pattern.test(commandLine));
+    const matchedPattern = CI_CD_PATTERNS.find((p) =>
+      p.pattern.test(commandLine),
+    );
     if (!matchedPattern) {
       return;
     }
@@ -85,7 +87,7 @@ export class TerminalAutoReceipt implements vscode.Disposable {
       });
 
       vscode.window.showInformationMessage(
-        `MAIP: Receipt created for ${matchedPattern.action} (${receipt.id.substring(0, 8)})`,
+        `MAIP: Receipt created for ${matchedPattern.action} (${(receipt.receipt_id || receipt.id).substring(0, 20)})`,
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";

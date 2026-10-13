@@ -98,7 +98,10 @@ class GitHookAutoReceipt {
         this.lastKnownCommit = currentCommit;
         const branchName = repo.state.HEAD?.name ?? "unknown";
         const workspaceFolder = repo.rootUri.fsPath;
-        const commitHash = crypto.createHash("sha256").update(currentCommit, "utf8").digest("hex");
+        const commitHash = crypto
+            .createHash("sha256")
+            .update(currentCommit, "utf8")
+            .digest("hex");
         try {
             const receipt = await this.client.createReceipt({
                 action: "git-commit",
@@ -110,11 +113,12 @@ class GitHookAutoReceipt {
                     branch: branchName,
                     previous_commit: previousCommit ?? null,
                     workspace_folder: workspaceFolder,
+                    requested_algorithm: (0, config_1.getSigningAlgorithm)(),
                     source: "vscode-auto-receipt",
                     timestamp: new Date().toISOString(),
                 },
             });
-            vscode.window.showInformationMessage(`MAIP: Receipt created for commit ${currentCommit.substring(0, 8)} (${receipt.id.substring(0, 8)})`);
+            vscode.window.showInformationMessage(`MAIP: Receipt created for commit ${currentCommit.substring(0, 8)} (${(receipt.receipt_id || receipt.id).substring(0, 20)})`);
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Unknown error";

@@ -19,11 +19,13 @@ export function registerListReceiptsCommand(
   return vscode.commands.registerCommand("maip.listReceipts", async () => {
     if (!isConfigured()) {
       const action = await vscode.window.showErrorMessage(
-        "MAIP is not configured. Set your API key and Tenant ID in settings.",
-        "Open Settings",
+        "MAIP is not configured. Run MAIP: Configure Credentials to connect securely.",
+        "Configure Credentials",
       );
-      if (action === "Open Settings") {
-        await vscode.commands.executeCommand("workbench.action.openSettings", "maip");
+      if (action === "Configure Credentials") {
+        await vscode.commands.executeCommand(
+          "maip.configure",
+        );
       }
       return;
     }
@@ -47,7 +49,9 @@ export function registerListReceiptsCommand(
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      vscode.window.showErrorMessage(`MAIP: Failed to list receipts: ${message}`);
+      vscode.window.showErrorMessage(
+        `MAIP: Failed to list receipts: ${message}`,
+      );
     }
   });
 }
@@ -76,7 +80,7 @@ function showReceiptsWebview(receipts: readonly Receipt[]): void {
       <td class="mono">${escapeHtml(r.agent_id.substring(0, 8))}...</td>
       <td>${formatDate(r.created_at)}</td>
       <td>
-        <button class="btn-small" onclick="verifyReceipt('${escapeHtml(r.id)}')">Verify</button>
+        <button class="btn-small" onclick="verifyReceipt('${escapeHtml(r.receipt_id || r.id)}')">Verify</button>
       </td>
     </tr>`,
     )
@@ -122,14 +126,20 @@ function showReceiptsWebview(receipts: readonly Receipt[]): void {
       font-weight: 500;
     }
     .badge-action { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-    .badge-ml_pipeline { background: #2d5a27; color: #c6e6c2; }
-    .badge-data_versioning { background: #5a4327; color: #e6d5c2; }
+    .badge-genesis { background: #5a4d27; color: #e6dfc2; }
+    .badge-revocation { background: #5a2727; color: #e6c2c2; }
     .badge-delegation { background: #27405a; color: #c2d5e6; }
-    .badge-audit { background: #5a2727; color: #e6c2c2; }
+    .badge-data\\.attestation { background: #2d5a27; color: #c6e6c2; }
+    .badge-model\\.attestation { background: #5a4327; color: #e6d5c2; }
+    .badge-compliance { background: #5a2756; color: #e6c2e3; }
+    .badge-truth\\.claim { background: #27505a; color: #c2e2e6; }
+    .badge-truth\\.verification { background: #2d5a27; color: #c6e6c2; }
     .status { font-weight: 500; }
-    .status-complete { color: var(--vscode-testing-iconPassed); }
+    .status-valid { color: var(--vscode-testing-iconPassed); }
     .status-pending { color: var(--vscode-editorWarning-foreground); }
-    .status-failed { color: var(--vscode-testing-iconFailed); }
+    .status-revoked { color: var(--vscode-testing-iconFailed); }
+    .status-expired { color: var(--vscode-editorWarning-foreground); }
+    .status-superseded { color: var(--vscode-descriptionForeground); }
     .btn-small {
       padding: 3px 8px;
       border: 1px solid var(--vscode-button-border, var(--vscode-button-background));
@@ -172,15 +182,21 @@ function showReceiptsWebview(receipts: readonly Receipt[]): void {
 </body>
 </html>`;
 
-  panel.webview.onDidReceiveMessage(async (message: { command: string; receiptId?: string }) => {
-    if (message.command === "verify" && message.receiptId) {
-      await vscode.commands.executeCommand("maip.verifyReceipt", message.receiptId);
-    }
-  });
+  panel.webview.onDidReceiveMessage(
+    async (message: { command: string; receiptId?: string }) => {
+      if (message.command === "verify" && message.receiptId) {
+        await vscode.commands.executeCommand(
+          "maip.verifyReceipt",
+          message.receiptId,
+        );
+      }
+    },
+  );
 }
 
-function escapeHtml(text: string): string {
-  return text
+function escapeHtml(text: unknown): string {
+  if (text === null || text === undefined) return "";
+  return String(text)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

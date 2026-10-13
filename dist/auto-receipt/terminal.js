@@ -106,7 +106,7 @@ class TerminalAutoReceipt {
                     timestamp: new Date().toISOString(),
                 },
             });
-            vscode.window.showInformationMessage(`MAIP: Receipt created for ${matchedPattern.action} (${receipt.id.substring(0, 8)})`);
+            vscode.window.showInformationMessage(`MAIP: Receipt created for ${matchedPattern.action} (${(receipt.receipt_id || receipt.id).substring(0, 20)})`);
         }
         catch (error) {
             const message = error instanceof Error ? error.message : "Unknown error";
