@@ -183,7 +183,7 @@
     "package": "vsce package",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "vscode:prepublish": "npm run build"
+    "vscode:prepublish": "node scripts/check-package.cjs && npm run build"
   },
   "dependencies": {},
   "devDependencies": {

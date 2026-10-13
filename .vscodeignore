@@ -10,3 +10,5 @@ tsconfig.json
 vitest.config.ts
 dist/**/*.map
 dist/**/*.d.ts
+
+scripts/**

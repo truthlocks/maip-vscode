@@ -1,5 +1,7 @@
 ## 1.4.4
 
+- Use the existing 180px Truthlocks brand icon and validate Marketplace dimensions before packaging.
+
 - Align agent scopes, trust factors/history and delegation arrays with the deployed API.
 - Support canonical MAIP IDs in hovers and decorations; restrict hover command links.
 - Export a bounded, read-only agent evidence snapshot instead of an invalid audit-report request.
